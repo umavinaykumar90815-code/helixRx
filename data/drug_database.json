@@ -1,0 +1,32 @@
+{
+  "Clopidogrel": {
+    "gene": "CYP2C19",
+    "indication": "Antiplatelet / Cardiovascular",
+    "high_risk_phenotypes": ["Poor Metabolizer", "Intermediate Metabolizer"],
+    "alternative_drugs": ["Prasugrel", "Ticagrelor"]
+  },
+  "Codeine": {
+    "gene": "CYP2D6",
+    "indication": "Analgesic / Pain Management",
+    "high_risk_phenotypes": ["Poor Metabolizer", "Ultra-Rapid Metabolizer"],
+    "alternative_drugs": ["Morphine", "Non-opioid analgesics"]
+  },
+  "Warfarin": {
+    "gene": "CYP2C9",
+    "indication": "Anticoagulant / Blood Thinner",
+    "high_risk_phenotypes": ["Poor Metabolizer", "Intermediate Metabolizer"],
+    "alternative_drugs": ["Direct Oral Anticoagulants (DOACs - Apixaban, Rivaroxaban)"]
+  },
+  "Simvastatin": {
+    "gene": "SLCO1B1",
+    "indication": "Statin / Lipid Lowering",
+    "high_risk_phenotypes": ["Poor Metabolizer"],
+    "alternative_drugs": ["Pravastatin", "Rosuvastatin"]
+  },
+  "Fluorouracil": {
+    "gene": "DPYD",
+    "indication": "Oncology / Chemotherapy",
+    "high_risk_phenotypes": ["Poor Metabolizer", "Intermediate Metabolizer"],
+    "alternative_drugs": ["Non-fluoropyrimidine chemotherapy regimens"]
+  }
+}

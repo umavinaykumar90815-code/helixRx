@@ -1,0 +1,30 @@
+{
+  "Clopidogrel": {
+    "CYP2C19": {
+      "Poor Metabolizer": {
+        "fda_boxed_warning": true,
+        "recommendation": "FDA Boxed Warning: Diminished effectiveness in CYP2C19 poor metabolizers. Consider alternative treatment."
+      }
+    }
+  },
+  "Codeine": {
+    "CYP2D6": {
+      "Ultra-Rapid Metabolizer": {
+        "fda_boxed_warning": true,
+        "recommendation": "FDA Contraindication: Ultra-rapid conversion to morphine can lead to fatal overdose."
+      },
+      "Poor Metabolizer": {
+        "fda_boxed_warning": false,
+        "recommendation": "FDA Note: Reduced conversion to morphine; potential reduced efficacy."
+      }
+    }
+  },
+  "Abacavir": {
+    "HLAB": {
+      "Poor Metabolizer": {
+        "fda_boxed_warning": true,
+        "recommendation": "FDA Boxed Warning: Screening for HLA-B*57:01 is required prior to initiating therapy. Do not use in HLA-B*57:01 positive patients."
+      }
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "Clopidogrel": {
+    "CYP2C19": {
+      "Poor Metabolizer": {
+        "risk_level": "High Risk",
+        "recommendation": "Avoid Clopidogrel due to significantly reduced active metabolite formation. Switch to Prasugrel or Ticagrelor."
+      },
+      "Intermediate Metabolizer": {
+        "risk_level": "Moderate Risk",
+        "recommendation": "Consider alternative antiplatelet agents (Prasugrel/Ticagrelor) or adjust dosage."
+      }
+    }
+  },
+  "Codeine": {
+    "CYP2D6": {
+      "Poor Metabolizer": {
+        "risk_level": "High Risk",
+        "recommendation": "Avoid Codeine due to lack of analgesic effect (analgesic failure)."
+      },
+      "Ultra-Rapid Metabolizer": {
+        "risk_level": "Toxic Risk",
+        "recommendation": "Avoid Codeine due to high risk of life-threatening respiratory depression from excessive morphine conversion."
+      }
+    }
+  },
+  "Warfarin": {
+    "CYP2C9": {
+      "Poor Metabolizer": {
+        "risk_level": "High Risk",
+        "recommendation": "Significantly reduce starting dose by 50-80% or select alternative anticoagulant due to severe bleeding risk."
+      }
+    }
+  },
+  "Simvastatin": {
+    "SLCO1B1": {
+      "Poor Metabolizer": {
+        "risk_level": "High Risk",
+        "recommendation": "Avoid 80 mg dose. Lower starting dose or switch to alternative statin (Pravastatin) due to myopathy/rhabdomyolysis risk."
+      }
+    }
+  },
+  "Fluorouracil": {
+    "DPYD": {
+      "Poor Metabolizer": {
+        "risk_level": "Toxic Risk",
+        "recommendation": "Avoid Fluorouracil completely. DPYD deficiency causes lethal systemic toxicity."
+      }
+    }
+  },
+  "Abacavir": {
+    "HLAB": {
+      "Poor Metabolizer": {
+        "risk_level": "High Risk",
+        "recommendation": "HLA-B*57:01 Positive. Abacavir is CONTRAINDICATED due to high risk of severe, potentially fatal hypersensitivity reaction (HSR). Use alternative antiretroviral."
+      },
+      "Normal Metabolizer": {
+        "risk_level": "Safe / Normal",
+        "recommendation": "HLA-B*57:01 Negative. Standard dosing per clinical guidelines."
+      }
+    }
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "Hypertension": {
+    "biomarkers": [
+      "systolic_bp",
+      "diastolic_bp"
+    ],
+    "targets": {
+      "systolic_bp": {
+        "max": 130
+      },
+      "diastolic_bp": {
+        "max": 80
+      }
+    },
+    "drugs": {
+      "Amlodipine": {
+        "standard_dose": 5.0,
+        "max_dose": 10.0,
+        "titration_step": 2.5
+      },
+      "Telmisartan": {
+        "standard_dose": 40.0,
+        "max_dose": 80.0,
+        "titration_step": 40.0
+      },
+      "Lisinopril": {
+        "standard_dose": 10.0,
+        "max_dose": 40.0,
+        "titration_step": 10.0
+      }
+    }
+  },
+  "Hypothyroidism": {
+    "biomarkers": [
+      "tsh"
+    ],
+    "targets": {
+      "tsh": {
+        "min": 0.4,
+        "max": 4.0
+      }
+    },
+    "drugs": {
+      "Levothyroxine": {
+        "standard_dose": 50.0,
+        "max_dose": 200.0,
+        "titration_step": 12.5
+      }
+    }
+  },
+  "Hyperlipidemia": {
+    "biomarkers": [
+      "ldl_cholesterol"
+    ],
+    "targets": {
+      "ldl_cholesterol": {
+        "max": 100
+      }
+    },
+    "drugs": {
+      "Atorvastatin": {
+        "standard_dose": 20.0,
+        "max_dose": 80.0,
+        "titration_step": 20.0
+      },
+      "Rosuvastatin": {
+        "standard_dose": 10.0,
+        "max_dose": 40.0,
+        "titration_step": 10.0
+      }
+    }
+  },
+  "Chronic Kidney Disease": {
+    "biomarkers": [
+      "egfr",
+      "creatinine"
+    ],
+    "targets": {
+      "egfr": {
+        "min": 60
+      }
+    },
+    "drugs": {
+      "Allopurinol": {
+        "standard_dose": 300.0,
+        "max_dose": 300.0,
+        "renal_cutoff_egfr": 30,
+        "adjusted_dose": 100.0
+      }
+    }
+  },
+  "Diabetes": {
+    "biomarkers": [
+      "fbs",
+      "ppbs",
+      "hba1c"
+    ],
+    "targets": {
+      "fbs": {
+        "max": 130
+      },
+      "ppbs": {
+        "max": 180
+      },
+      "hba1c": {
+        "max": 7.0
+      }
+    },
+    "drugs": {
+      "Metformin": {
+        "standard_dose": 1000.0,
+        "max_dose": 2000.0,
+        "titration_step": 500.0,
+        "renal_cutoff_egfr": 30,
+        "adjusted_dose": 0.0
+      },
+      "Glimepiride": {
+        "standard_dose": 2.0,
+        "max_dose": 6.0,
+        "titration_step": 1.0
+      },
+      "Gliclazide": {
+        "standard_dose": 80.0,
+        "max_dose": 320.0,
+        "titration_step": 40.0
+      }
+    }
+  }
+}

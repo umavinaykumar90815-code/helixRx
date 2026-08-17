@@ -1,0 +1,10 @@
+streamlit
+pandas
+biopython
+PyVCF3
+requests
+reportlab
+scikit-learn
+fastapi
+uvicorn
+plotly
