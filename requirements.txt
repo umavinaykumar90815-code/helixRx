@@ -1,10 +1,7 @@
-streamlit
-pandas
-biopython
-PyVCF3
-requests
-reportlab
-scikit-learn
-fastapi
-uvicorn
-plotly
+streamlit>=1.35.0
+plotly>=5.20.0
+numpy>=1.26.0
+pandas>=2.2.0
+pypdf>=4.2.0
+scikit-learn>=1.4.0
+fpdf2>=2.7.0

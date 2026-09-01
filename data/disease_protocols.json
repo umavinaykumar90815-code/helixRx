@@ -1,94 +1,4 @@
 {
-  "Hypertension": {
-    "biomarkers": [
-      "systolic_bp",
-      "diastolic_bp"
-    ],
-    "targets": {
-      "systolic_bp": {
-        "max": 130
-      },
-      "diastolic_bp": {
-        "max": 80
-      }
-    },
-    "drugs": {
-      "Amlodipine": {
-        "standard_dose": 5.0,
-        "max_dose": 10.0,
-        "titration_step": 2.5
-      },
-      "Telmisartan": {
-        "standard_dose": 40.0,
-        "max_dose": 80.0,
-        "titration_step": 40.0
-      },
-      "Lisinopril": {
-        "standard_dose": 10.0,
-        "max_dose": 40.0,
-        "titration_step": 10.0
-      }
-    }
-  },
-  "Hypothyroidism": {
-    "biomarkers": [
-      "tsh"
-    ],
-    "targets": {
-      "tsh": {
-        "min": 0.4,
-        "max": 4.0
-      }
-    },
-    "drugs": {
-      "Levothyroxine": {
-        "standard_dose": 50.0,
-        "max_dose": 200.0,
-        "titration_step": 12.5
-      }
-    }
-  },
-  "Hyperlipidemia": {
-    "biomarkers": [
-      "ldl_cholesterol"
-    ],
-    "targets": {
-      "ldl_cholesterol": {
-        "max": 100
-      }
-    },
-    "drugs": {
-      "Atorvastatin": {
-        "standard_dose": 20.0,
-        "max_dose": 80.0,
-        "titration_step": 20.0
-      },
-      "Rosuvastatin": {
-        "standard_dose": 10.0,
-        "max_dose": 40.0,
-        "titration_step": 10.0
-      }
-    }
-  },
-  "Chronic Kidney Disease": {
-    "biomarkers": [
-      "egfr",
-      "creatinine"
-    ],
-    "targets": {
-      "egfr": {
-        "min": 60
-      }
-    },
-    "drugs": {
-      "Allopurinol": {
-        "standard_dose": 300.0,
-        "max_dose": 300.0,
-        "renal_cutoff_egfr": 30,
-        "adjusted_dose": 100.0
-      }
-    }
-  },
   "Diabetes": {
     "biomarkers": [
       "fbs",
@@ -123,6 +33,184 @@
         "standard_dose": 80.0,
         "max_dose": 320.0,
         "titration_step": 40.0
+      },
+      "Insulin": {
+        "standard_dose": 10.0,
+        "max_dose": 50.0,
+        "titration_step": 2.0
+      }
+    }
+  },
+  "Hypertension": {
+    "biomarkers": [
+      "systolic_bp",
+      "diastolic_bp"
+    ],
+    "targets": {
+      "systolic_bp": {
+        "max": 130
+      },
+      "diastolic_bp": {
+        "max": 80
+      }
+    },
+    "drugs": {
+      "Amlodipine": {
+        "standard_dose": 5.0,
+        "max_dose": 10.0,
+        "titration_step": 2.5
+      },
+      "Telmisartan": {
+        "standard_dose": 40.0,
+        "max_dose": 80.0,
+        "titration_step": 40.0
+      },
+      "Lisinopril": {
+        "standard_dose": 10.0,
+        "max_dose": 40.0,
+        "titration_step": 10.0
+      }
+    }
+  },
+  "Thyroid Disorders": {
+    "biomarkers": [
+      "tsh",
+      "free_t4"
+    ],
+    "targets": {
+      "tsh": {
+        "min": 0.4,
+        "max": 4.0
+      },
+      "free_t4": {
+        "min": 0.8,
+        "max": 1.8
+      }
+    },
+    "drugs": {
+      "Levothyroxine": {
+        "standard_dose": 50.0,
+        "max_dose": 200.0,
+        "titration_step": 12.5
+      },
+      "Methimazole": {
+        "standard_dose": 10.0,
+        "max_dose": 40.0,
+        "titration_step": 5.0
+      }
+    }
+  },
+  "Hyperlipidemia": {
+    "biomarkers": [
+      "ldl_cholesterol",
+      "triglycerides"
+    ],
+    "targets": {
+      "ldl_cholesterol": {
+        "max": 100
+      },
+      "triglycerides": {
+        "max": 150
+      }
+    },
+    "drugs": {
+      "Atorvastatin": {
+        "standard_dose": 20.0,
+        "max_dose": 80.0,
+        "titration_step": 20.0
+      },
+      "Rosuvastatin": {
+        "standard_dose": 10.0,
+        "max_dose": 40.0,
+        "titration_step": 10.0
+      },
+      "Fenofibrate": {
+        "standard_dose": 145.0,
+        "max_dose": 145.0,
+        "renal_cutoff_egfr": 30,
+        "adjusted_dose": 48.0
+      }
+    }
+  },
+  "Chronic Kidney Disease": {
+    "biomarkers": [
+      "egfr",
+      "creatinine",
+      "uacr"
+    ],
+    "targets": {
+      "egfr": {
+        "min": 60
+      },
+      "uacr": {
+        "max": 30
+      }
+    },
+    "drugs": {
+      "Allopurinol": {
+        "standard_dose": 300.0,
+        "max_dose": 300.0,
+        "renal_cutoff_egfr": 30,
+        "adjusted_dose": 100.0
+      },
+      "Dapagliflozin": {
+        "standard_dose": 10.0,
+        "max_dose": 10.0,
+        "renal_cutoff_egfr": 25,
+        "adjusted_dose": 0.0
+      }
+    }
+  },
+  "Asthma / COPD": {
+    "biomarkers": [
+      "fev1_percent",
+      "peak_flow"
+    ],
+    "targets": {
+      "fev1_percent": {
+        "min": 80
+      },
+      "peak_flow": {
+        "min": 300
+      }
+    },
+    "drugs": {
+      "Salbutamol / Albuterol": {
+        "standard_dose": 100.0,
+        "max_dose": 400.0,
+        "titration_step": 100.0
+      },
+      "Budenoside": {
+        "standard_dose": 200.0,
+        "max_dose": 800.0,
+        "titration_step": 200.0
+      }
+    }
+  },
+  "Heart Failure": {
+    "biomarkers": [
+      "ejection_fraction",
+      "bnp"
+    ],
+    "targets": {
+      "ejection_fraction": {
+        "min": 50
+      },
+      "bnp": {
+        "max": 100
+      }
+    },
+    "drugs": {
+      "Furosemide": {
+        "standard_dose": 40.0,
+        "max_dose": 240.0,
+        "titration_step": 20.0
+      },
+      "Spironolactone": {
+        "standard_dose": 25.0,
+        "max_dose": 50.0,
+        "renal_cutoff_egfr": 30,
+        "adjusted_dose": 0.0
       }
     }
   }
