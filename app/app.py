@@ -140,7 +140,47 @@ else:
     if st.sidebar.button("🚪 Log Out", use_container_width=True):
         logout()
     st.sidebar.divider()
+    # -------------------------------------------------------------
+# AI CLINICAL ASSISTANT DRAWER
+# -------------------------------------------------------------
+with st.sidebar.expander("💬 HelixRx AI Assistant", expanded=False):
+    st.caption("Ask questions regarding your medications, genetic markers, or lab reports.")
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {"role": "assistant", "content": "Hello! I am your HelixRx Clinical Assistant. Ask me about drug dosing, kidney/liver thresholds, or genetic guidelines (CPIC/FDA)."}
+        ]
 
+    # Render previous messages
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    # Chat user input
+    user_prompt = st.chat_input("Ask a question...", key="sidebar_chat_input")
+    if user_prompt:
+        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.write(user_prompt)
+
+        # Context-aware response logic
+        prompt_lower = user_prompt.lower()
+        if "egfr" in prompt_lower or "kidney" in prompt_lower:
+            reply = "eGFR assesses kidney function. Normal is ≥90 mL/min. An eGFR under 60 indicates impairment, often requiring dose reductions for renally cleared medications."
+        elif "alt" in prompt_lower or "liver" in prompt_lower:
+            reply = "ALT (alanine aminotransferase) evaluates liver enzymes. Standard baseline is typically ≤40 U/L. Elevated ALT signals hepatic stress, which can slow hepatic drug metabolism."
+        elif "cyp2c19" in prompt_lower or "clopidogrel" in prompt_lower:
+            reply = "CYP2C19 activates the prodrug Clopidogrel (Plavix). Poor metabolizers (*2/*2) fail to generate the active metabolite, elevating thrombosis risk. Alternative therapy (e.g., Ticagrelor) is recommended."
+        elif "metformin" in prompt_lower:
+            reply = "Metformin is a first-line biguanide for Type 2 Diabetes. It is contraindicated if eGFR < 30 mL/min due to the risk of lactic acidosis."
+        elif "cadd" in prompt_lower or "ml" in prompt_lower:
+            reply = "The ML Random Forest predictor uses CADD, PolyPhen, SIFT, and PhyloP to classify novel unannotated genomic mutations as either Loss-of-Function (pathogenic) or Tolerated (benign)."
+        else:
+            reply = "HelixRx assesses your medication safety by cross-referencing CPIC/FDA guidelines with your DNA and organ vitals. Always verify dosage changes with your prescribing clinician."
+
+        st.session_state.chat_history.append({"role": "assistant", "content": reply})
+        with st.chat_message("assistant"):
+            st.write(reply)
     # =========================================================
     # A. PATIENT PORTAL (ONLY MULTI-DISEASE & MEDICATION ASSISTER)
     # =========================================================
