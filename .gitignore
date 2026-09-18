@@ -8,3 +8,5 @@ data/raw_vcf/*
 data/raw_reports/*
 !data/raw_vcf/.gitkeep
 !data/raw_reports/.gitkeep
+venv/
+.venv/

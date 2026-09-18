@@ -27,7 +27,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling (Dark-Mode & Light-Mode Compatible)
+# Custom Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -95,8 +95,45 @@ def logout():
     st.rerun()
 
 # -------------------------------------------------------------
-# 1. LOGIN GATEWAY (UNAUTHENTICATED VIEW)
+# CLINICAL AI ASSISTANT (FLOATING MODAL)
 # -------------------------------------------------------------
+@st.dialog("💬 HelixRx Clinical AI Assistant")
+def show_ai_assistant_dialog():
+    st.caption("Ask questions regarding your medications, genetic markers, or organ clearance values.")
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {"role": "assistant", "content": "Hello! I am your HelixRx Clinical Assistant. Ask me about drug dosing, kidney/liver thresholds, or genetic guidelines (CPIC/FDA)."}
+        ]
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    user_prompt = st.chat_input("Ask a clinical or dosage question...")
+    if user_prompt:
+        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+        
+        prompt_lower = user_prompt.lower()
+        if "egfr" in prompt_lower or "kidney" in prompt_lower:
+            reply = "eGFR assesses kidney function. Normal baseline is ≥90 mL/min/1.73m². An eGFR under 60 indicates impairment, often requiring dose adjustments for renally cleared medications."
+        elif "alt" in prompt_lower or "liver" in prompt_lower:
+            reply = "ALT (alanine aminotransferase) evaluates liver integrity. Normal levels are ≤40 U/L. Elevated ALT signals hepatic stress, which slows down hepatic drug metabolism."
+        elif "cyp2c19" in prompt_lower or "clopidogrel" in prompt_lower:
+            reply = "CYP2C19 bioactivates Clopidogrel (Plavix). Poor metabolizers (*2/*2) fail to produce sufficient active antiplatelet compound, drastically increasing thrombosis risk. Alternative agents like Ticagrelor or Prasugrel are recommended."
+        elif "metformin" in prompt_lower:
+            reply = "Metformin is a first-line biguanide for Type 2 Diabetes. It is strictly contraindicated if eGFR < 30 mL/min due to the risk of fatal lactic acidosis."
+        elif "cadd" in prompt_lower or "ml" in prompt_lower:
+            reply = "The ML Random Forest predictor uses structural and evolutionary scores (CADD, PolyPhen-2, SIFT, PhyloP) to classify novel variants as either Loss-of-Function (pathogenic) or Tolerated (benign)."
+        else:
+            reply = "HelixRx cross-references your DNA sequence and organ clearance vitals with CPIC Level A/B and FDA guidelines. Always consult your attending clinician before making any changes to prescriptions."
+
+        st.session_state.chat_history.append({"role": "assistant", "content": reply})
+        st.rerun()
+
+# =============================================================
+# 1. LOGIN GATEWAY (UNAUTHENTICATED VIEW)
+# =============================================================
 if not st.session_state.authenticated:
     st.markdown('<h1 style="text-align:center;">🧬 Clinical Pharmacogenomics (PGx) Safety Engine</h1>', unsafe_allow_html=True)
     st.markdown('<p style="text-align:center; color:#9CA3AF;">Precision Decision Support System • Genomics • Organ Clearance • Multi-Disease Protocols</p>', unsafe_allow_html=True)
@@ -130,59 +167,27 @@ if not st.session_state.authenticated:
                     else:
                         st.error("Invalid credentials. (Demo: `doctor@helix.org` / `doctor123`)")
 
-# -------------------------------------------------------------
+# =============================================================
 # 2. AUTHENTICATED PORTALS
-# -------------------------------------------------------------
+# =============================================================
 else:
     # Sidebar Profile & Session Controls
     st.sidebar.markdown(f"**Logged In:** `{st.session_state.user_name}`")
     st.sidebar.markdown(f"**Active Portal:** `{st.session_state.user_role}`")
+    
     if st.sidebar.button("🚪 Log Out", use_container_width=True):
         logout()
+        
     st.sidebar.divider()
-    # -------------------------------------------------------------
-# AI CLINICAL ASSISTANT DRAWER
-# -------------------------------------------------------------
-with st.sidebar.expander("💬 HelixRx AI Assistant", expanded=False):
-    st.caption("Ask questions regarding your medications, genetic markers, or lab reports.")
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [
-            {"role": "assistant", "content": "Hello! I am your HelixRx Clinical Assistant. Ask me about drug dosing, kidney/liver thresholds, or genetic guidelines (CPIC/FDA)."}
-        ]
 
-    # Render previous messages
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    # Conversational AI Assistant Button
+    if st.sidebar.button("💬 Open HelixRx AI Assistant", use_container_width=True):
+        show_ai_assistant_dialog()
 
-    # Chat user input
-    user_prompt = st.chat_input("Ask a question...", key="sidebar_chat_input")
-    if user_prompt:
-        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
-        with st.chat_message("user"):
-            st.write(user_prompt)
+    st.sidebar.divider()
 
-        # Context-aware response logic
-        prompt_lower = user_prompt.lower()
-        if "egfr" in prompt_lower or "kidney" in prompt_lower:
-            reply = "eGFR assesses kidney function. Normal is ≥90 mL/min. An eGFR under 60 indicates impairment, often requiring dose reductions for renally cleared medications."
-        elif "alt" in prompt_lower or "liver" in prompt_lower:
-            reply = "ALT (alanine aminotransferase) evaluates liver enzymes. Standard baseline is typically ≤40 U/L. Elevated ALT signals hepatic stress, which can slow hepatic drug metabolism."
-        elif "cyp2c19" in prompt_lower or "clopidogrel" in prompt_lower:
-            reply = "CYP2C19 activates the prodrug Clopidogrel (Plavix). Poor metabolizers (*2/*2) fail to generate the active metabolite, elevating thrombosis risk. Alternative therapy (e.g., Ticagrelor) is recommended."
-        elif "metformin" in prompt_lower:
-            reply = "Metformin is a first-line biguanide for Type 2 Diabetes. It is contraindicated if eGFR < 30 mL/min due to the risk of lactic acidosis."
-        elif "cadd" in prompt_lower or "ml" in prompt_lower:
-            reply = "The ML Random Forest predictor uses CADD, PolyPhen, SIFT, and PhyloP to classify novel unannotated genomic mutations as either Loss-of-Function (pathogenic) or Tolerated (benign)."
-        else:
-            reply = "HelixRx assesses your medication safety by cross-referencing CPIC/FDA guidelines with your DNA and organ vitals. Always verify dosage changes with your prescribing clinician."
-
-        st.session_state.chat_history.append({"role": "assistant", "content": reply})
-        with st.chat_message("assistant"):
-            st.write(reply)
     # =========================================================
-    # A. PATIENT PORTAL (ONLY MULTI-DISEASE & MEDICATION ASSISTER)
+    # A. PATIENT PORTAL (MULTI-DISEASE & MEDICATION ASSISTER)
     # =========================================================
     if st.session_state.user_role == "Patient":
         st.markdown("""
@@ -299,8 +304,10 @@ with st.sidebar.expander("💬 HelixRx AI Assistant", expanded=False):
             with open(report_temp_path, "wb") as f:
                 f.write(report_file.getbuffer())
             extracted_data = parse_medical_report(report_temp_path)
-            if extracted_data.get("egfr") is not None: parsed_egfr = extracted_data["egfr"]
-            if extracted_data.get("alt") is not None: parsed_alt = extracted_data["alt"]
+            if extracted_data.get("egfr") is not None: 
+                parsed_egfr = extracted_data["egfr"]
+            if extracted_data.get("alt") is not None: 
+                parsed_alt = extracted_data["alt"]
             st.sidebar.success("Lab file scanned.")
 
         available_drugs = [
