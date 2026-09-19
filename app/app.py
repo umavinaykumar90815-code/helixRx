@@ -20,15 +20,15 @@ from engine.dosage_engine import calculate_dosage_adjustment
 from engine.universal_clinical_engine import evaluate_disease_management
 from utils import generate_pdf_report
 
-# Page Configuration
+# MUST be the first Streamlit command called in the script
 st.set_page_config(
-    page_title="HelixRx | Dual Gateway Decision Platform",
-    layout="wide",
+    page_title="HelixRx | Precision PGx & Clinical AI",
     page_icon="🧬",
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling
+# Custom Global Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -117,7 +117,7 @@ def show_ai_assistant_dialog():
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-    # Input field (no st.rerun() needed — Streamlit automatically re-renders the dialog)
+    # Chat input field
     user_prompt = st.chat_input("Type your question here...")
     if user_prompt:
         st.session_state.chat_history.append({"role": "user", "content": user_prompt})
@@ -125,7 +125,7 @@ def show_ai_assistant_dialog():
             with st.chat_message("user"):
                 st.write(user_prompt)
 
-        # System prompt to give the AI expert clinical context
+        # Expert clinical system context
         system_instruction = (
             "You are HelixRx AI, an expert clinical pharmacogenomics (PGx) and medication safety assistant. "
             "Provide accurate, clear, and helpful answers regarding medications, dosages, organ clearance (eGFR, ALT), "
@@ -140,7 +140,6 @@ def show_ai_assistant_dialog():
             else:
                 client = genai.Client(api_key=api_key)
                 
-                # Convert history to prompt context
                 full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
                 response = client.models.generate_content(
                     model="gemini-3.6-flash",
@@ -196,20 +195,33 @@ if not st.session_state.authenticated:
 # 2. AUTHENTICATED PORTALS
 # =============================================================
 else:
-    # Sidebar Profile & Session Controls
-    st.sidebar.markdown(f"**Logged In:** `{st.session_state.user_name}`")
-    st.sidebar.markdown(f"**Active Portal:** `{st.session_state.user_role}`")
-    
-    if st.sidebar.button("🚪 Log Out", use_container_width=True):
-        logout()
+    # Sidebar Header & Profile Branding
+    with st.sidebar:
+        st.markdown(
+            """
+            <div style="text-align: center; padding: 10px 0;">
+                <h1 style="color: #00ADB5; margin-bottom: 0px;">🧬 HelixRx</h1>
+                <p style="color: #888888; font-size: 0.85rem; margin-top: 0px;">
+                    Pharmacogenomic Clinical Intelligence
+                </p>
+            </div>
+            <hr style="margin-top: 5px; margin-bottom: 15px;">
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown(f"**Logged In:** `{st.session_state.user_name}`")
+        st.markdown(f"**Active Portal:** `{st.session_state.user_role}`")
         
-    st.sidebar.divider()
+        if st.button("🚪 Log Out", use_container_width=True):
+            logout()
+            
+        st.divider()
 
-    # Conversational AI Assistant Button
-    if st.sidebar.button("💬 Open HelixRx AI Assistant", use_container_width=True):
-        show_ai_assistant_dialog()
+        # Conversational AI Assistant Trigger Button
+        if st.button("💬 Open HelixRx AI Assistant", use_container_width=True):
+            show_ai_assistant_dialog()
 
-    st.sidebar.divider()
+        st.divider()
 
     # =========================================================
     # A. PATIENT PORTAL (MULTI-DISEASE & MEDICATION ASSISTER)
@@ -312,52 +324,53 @@ else:
         tab1, tab2, tab3, tab4 = st.tabs([
             "📊 Patient PGx & Polypharmacy", 
             "🤖 ML Novel Variant Predictor", 
-            "📈 Dynamic PK Concentration Curves",
+            "📈 Dynamic PK Concentration Curves", 
             "📑 Clinical Audit & EHR Summary"
         ])
 
         ml_predictor = VariantImpactPredictor()
 
-        # Sidebar Ingestion for Doctors
-        st.sidebar.header("📥 Diagnostic & Genomic Ingestion")
-        report_file = st.sidebar.file_uploader("Upload Lab Report (PDF / TXT)", type=["pdf", "txt"], key="c_pdf_up")
+        # Sidebar Ingestion for Clinicians
+        with st.sidebar:
+            st.header("📥 Diagnostic & Genomic Ingestion")
+            report_file = st.file_uploader("Upload Lab Report (PDF / TXT)", type=["pdf", "txt"], key="c_pdf_up")
 
-        parsed_egfr, parsed_alt = 90.0, 25.0
-        if report_file is not None:
-            report_temp_path = os.path.join("data", "raw_reports", report_file.name)
-            os.makedirs(os.path.dirname(report_temp_path), exist_ok=True)
-            with open(report_temp_path, "wb") as f:
-                f.write(report_file.getbuffer())
-            extracted_data = parse_medical_report(report_temp_path)
-            if extracted_data.get("egfr") is not None: 
-                parsed_egfr = extracted_data["egfr"]
-            if extracted_data.get("alt") is not None: 
-                parsed_alt = extracted_data["alt"]
-            st.sidebar.success("Lab file scanned.")
+            parsed_egfr, parsed_alt = 90.0, 25.0
+            if report_file is not None:
+                report_temp_path = os.path.join("data", "raw_reports", report_file.name)
+                os.makedirs(os.path.dirname(report_temp_path), exist_ok=True)
+                with open(report_temp_path, "wb") as f:
+                    f.write(report_file.getbuffer())
+                extracted_data = parse_medical_report(report_temp_path)
+                if extracted_data.get("egfr") is not None: 
+                    parsed_egfr = extracted_data["egfr"]
+                if extracted_data.get("alt") is not None: 
+                    parsed_alt = extracted_data["alt"]
+                st.success("Lab file scanned.")
 
-        available_drugs = [
-            "Clopidogrel", "Codeine", "Warfarin", "Simvastatin", 
-            "Fluorouracil", "Abacavir", "Metformin", "Atorvastatin", "Other (Custom Tablet Name)"
-        ]
-        selected_options = st.sidebar.multiselect(
-            "Select Active Prescription(s)",
-            options=available_drugs,
-            default=["Clopidogrel"],
-            key="c_drug_select"
-        )
+            available_drugs = [
+                "Clopidogrel", "Codeine", "Warfarin", "Simvastatin", 
+                "Fluorouracil", "Abacavir", "Metformin", "Atorvastatin", "Other (Custom Tablet Name)"
+            ]
+            selected_options = st.multiselect(
+                "Select Active Prescription(s)",
+                options=available_drugs,
+                default=["Clopidogrel"],
+                key="c_drug_select"
+            )
 
-        selected_drugs = []
-        for drug in selected_options:
-            if drug == "Other (Custom Tablet Name)":
-                custom_drug_name = st.sidebar.text_input("Enter Custom Drug Name:", value="Aspirin", key="c_custom_drug")
-                if custom_drug_name.strip():
-                    selected_drugs.append(custom_drug_name.strip())
-            else:
-                selected_drugs.append(drug)
+            selected_drugs = []
+            for drug in selected_options:
+                if drug == "Other (Custom Tablet Name)":
+                    custom_drug_name = st.text_input("Enter Custom Drug Name:", value="Aspirin", key="c_custom_drug")
+                    if custom_drug_name.strip():
+                        selected_drugs.append(custom_drug_name.strip())
+                else:
+                    selected_drugs.append(drug)
 
-        egfr = st.sidebar.number_input("Kidney eGFR (mL/min/1.73m²)", 0, 150, int(parsed_egfr), key="c_egfr_val")
-        alt = st.sidebar.number_input("Liver ALT Transaminase (U/L)", 0, 500, int(parsed_alt), key="c_alt_val")
-        uploaded_vcf = st.sidebar.file_uploader("Upload Patient Genomic Sequence (.VCF)", type=["vcf"], key="c_vcf_up")
+            egfr = st.number_input("Kidney eGFR (mL/min/1.73m²)", 0, 150, int(parsed_egfr), key="c_egfr_val")
+            alt = st.number_input("Liver ALT Transaminase (U/L)", 0, 500, int(parsed_alt), key="c_alt_val")
+            uploaded_vcf = st.file_uploader("Upload Patient Genomic Sequence (.VCF)", type=["vcf"], key="c_vcf_up")
 
         # Genomic Resolution
         if uploaded_vcf is not None:
@@ -416,7 +429,7 @@ else:
                                 for w in organ_eval['organ_warnings']:
                                     st.caption(f"• {w}")
 
-                        # PDF Report Download
+                        # PDF Report Generation
                         vcf_name = uploaded_vcf.name if uploaded_vcf else "Population_Baseline.vcf"
                         pdf_filename = f"Clinical_PGx_Report_{drug}_{idx}.pdf"
                         organ_eval['egfr_val'] = egfr
