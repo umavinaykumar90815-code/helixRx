@@ -106,18 +106,16 @@ def show_ai_assistant_dialog():
         st.session_state.chat_history = [
             {
                 "role": "assistant",
-                "content": "Hello! I am your HelixRx Clinical Assistant. Ask me anything about medications, genetic markers, renal/hepatic thresholds, or drug-drug interactions."
+                "content": "Hello! I am your HelixRx Clinical Assistant. Ask me anything about medications, genetic markers, renal/hepatic thresholds, or drug-drug interactions in your preferred language."
             }
         ]
 
-    # Container for chat messages to allow proper scrolling
     chat_container = st.container(height=380)
     with chat_container:
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-    # Chat input field
     user_prompt = st.chat_input("Type your question here...")
     if user_prompt:
         st.session_state.chat_history.append({"role": "user", "content": user_prompt})
@@ -125,12 +123,12 @@ def show_ai_assistant_dialog():
             with st.chat_message("user"):
                 st.write(user_prompt)
 
-        # Expert clinical system context
         system_instruction = (
-            "You are HelixRx AI, an expert clinical pharmacogenomics (PGx) and medication safety assistant. "
-            "Provide accurate, clear, and helpful answers regarding medications, dosages, organ clearance (eGFR, ALT), "
+            "You are HelixRx AI, an expert multilingual clinical pharmacogenomics (PGx) and medication safety assistant. "
+            "Respond naturally in whatever language the user asks their question in (e.g., English, Telugu, Hindi, Spanish). "
+            "Provide clear, clinically accurate answers regarding medications, dosages, organ clearance (eGFR, ALT), "
             "and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
-            "while maintaining clinical accuracy. Always include a brief reminder to consult their healthcare provider."
+            "while maintaining strict medical accuracy. Always include a brief reminder to consult their healthcare provider."
         )
 
         try:
@@ -139,7 +137,6 @@ def show_ai_assistant_dialog():
                 reply = "⚠️ API Key not configured. Please add `GEMINI_API_KEY` to your Streamlit Cloud Secrets."
             else:
                 client = genai.Client(api_key=api_key)
-                
                 full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
                 response = client.models.generate_content(
                     model="gemini-3.6-flash",
@@ -223,22 +220,113 @@ else:
 
         st.divider()
 
-   # =========================================================
-    # A. PATIENT PORTAL (MULTI-DISEASE & MEDICATION ASSISTER)
+    # =========================================================
+    # A. PATIENT PORTAL (MULTI-DISEASE & MULTILINGUAL ASSISTER)
     # =========================================================
     if st.session_state.user_role == "Patient":
-        st.markdown("""
+        selected_lang = st.sidebar.selectbox("🌐 Choose Language / భాష / भाषा", ["English", "Telugu", "Hindi", "Spanish"])
+
+        TRANSLATIONS = {
+            "English": {
+                "portal_title": "Universal Multi-Disease & Medication Assister",
+                "portal_sub": "Verify treatment safety, target ranges, and personalized dosage adjustments against your latest test reports.",
+                "col1_title": "1️⃣ Select Disease & Enter Vitals",
+                "disease_label": "Clinical Diagnosis",
+                "col2_title": "2️⃣ Current Prescribed Medication",
+                "med_label": "Current Prescribed Drug",
+                "dose_label": "Current Prescribed Dosage",
+                "egfr_label": "Patient eGFR Metric (mL/min, default: 90)",
+                "eval_btn": "🔍 Evaluate Protocol & Dosage Efficacy",
+                "results_header": "📊 Evaluation Assessment",
+                "safe_badge": "✅ CURRENT DOSE IS OPTIMAL & SAFE",
+                "warn_badge": "⚠️ ADJUSTMENT / TITRATION RECOMMENDED",
+                "contra_badge": "⛔ CONTRAINDICATED / KIDNEY SAFETY WARNING",
+                "curr_dose": "Current Dose:",
+                "rec_dose": "Target-Adjusted Dose:",
+                "details_title": "Clinical Evaluation Details:",
+                "safety_note": "💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage.",
+                "explain_btn": "🗣️ Explain in Plain Language",
+                "generating": "Generating patient explanation..."
+            },
+            "Telugu": {
+                "portal_title": "సార్వత్రిక బహుళ-వ్యాధులు & ఔషధ సహాయకం",
+                "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన మోతాదును ధృవీకరించండి.",
+                "col1_title": "1️⃣ వ్యాధిని ఎంచుకుని వివరాలను నమోదు చేయండి",
+                "disease_label": "క్లినికల్ రోగనిర్ధారణ",
+                "col2_title": "2️⃣ ప్రస్తుత సూచించిన మందు",
+                "med_label": "ప్రస్తుతం వాడుతున్న మందు",
+                "dose_label": "ప్రస్తుత మోతాదు (Dosage)",
+                "egfr_label": "రోగి eGFR విలువ (mL/min, సాధారణం: 90)",
+                "eval_btn": "🔍 ప్రోటోకాల్ & మోతాదు సామర్థ్యాన్ని అంచనా వేయండి",
+                "results_header": "📊 మూల్యాంకన ఫలితాలు",
+                "safe_badge": "✅ ప్రస్తుత మోతాదు సురక్షితమైనది మరియు సరైనది",
+                "warn_badge": "⚠️ మోతాదు సర్దుబాటు సిఫార్సు చేయబడింది",
+                "contra_badge": "⛔ తీవ్రమైన ప్రమాదం / కిడ్నీ భద్రతా హెచ్చరిక",
+                "curr_dose": "ప్రస్తుత మోతాదు:",
+                "rec_dose": "సిఫార్సు చేసిన సరైన మోతాదు:",
+                "details_title": "క్లినికల్ మూల్యాంకన వివరాలు:",
+                "safety_note": "💡 **గమనిక:** మీ మోతాదును మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి.",
+                "explain_btn": "🗣️ సులభమైన తెలుగులో వివరణ పొందండి",
+                "generating": "తెలుగులో వివరణ రూపొందించబడుతోంది..."
+            },
+            "Hindi": {
+                "portal_title": "सार्वभौमिक बहु-रोग और दवा सहायक",
+                "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और व्यक्तिगत खुराक समायोजन की जाँच करें।",
+                "col1_title": "1️⃣ रोग चुनें और स्वास्थ्य विवरण दर्ज करें",
+                "disease_label": "चिकित्सीय निदान (Diagnosis)",
+                "col2_title": "2️⃣ वर्तमान निर्धारित दवा",
+                "med_label": "वर्तमान निर्धारित दवा",
+                "dose_label": "वर्तमान खुराक (Dosage)",
+                "egfr_label": "मरीज का eGFR स्तर (mL/min, डिफ़ॉल्ट: 90)",
+                "eval_btn": "🔍 प्रोटोकॉल और खुराक प्रभावशीलता का मूल्यांकन करें",
+                "results_header": "📊 मूल्यांकन परिणाम",
+                "safe_badge": "✅ वर्तमान खुराक इष्टतम और सुरक्षित है",
+                "warn_badge": "⚠️ खुराक समायोजन की सिफारिश की गई है",
+                "contra_badge": "⛔ गंभीर चेतावनी / किडनी सुरक्षा जोखिम",
+                "curr_dose": "वर्तमान खुराक:",
+                "rec_dose": "अनुशंसित समायोजित खुराक:",
+                "details_title": "चिकित्सीय मूल्यांकन विवरण:",
+                "safety_note": "💡 **सुरक्षा नोट:** कृपया अपनी निर्धारित खुराक बदलने से पहले अपने डॉक्टर से परामर्श लें।",
+                "explain_btn": "🗣️ सरल हिंदी में स्पष्टीकरण प्राप्त करें",
+                "generating": "हिंदी में विवरण तैयार किया जा रहा है..."
+            },
+            "Spanish": {
+                "portal_title": "Asistente Universal de Enfermedades y Medicamentos",
+                "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis personalizados con sus últimos análisis.",
+                "col1_title": "1️⃣ Seleccione Enfermedad e Ingrese Parámetros",
+                "disease_label": "Diagnóstico Clínico",
+                "col2_title": "2️⃣ Medicamento Prescrito Actual",
+                "med_label": "Medicamento Actual",
+                "dose_label": "Dosis Actual Prescrita",
+                "egfr_label": "Métrica eGFR del Paciente (mL/min, default: 90)",
+                "eval_btn": "🔍 Evaluar Eficacia de Protocolo y Dosis",
+                "results_header": "📊 Evaluación Clínica",
+                "safe_badge": "✅ LA DOSIS ACTUAL ES ÓPTIMA Y SEGURA",
+                "warn_badge": "⚠️ SE RECOMIENDA AJUSTE / TITULACIÓN",
+                "contra_badge": "⛔ CONTRAINDICADO / ADVERTENCIA DE SEGURIDAD RENAL",
+                "curr_dose": "Dosis Actual:",
+                "rec_dose": "Dosis Recomendada Ajustada:",
+                "details_title": "Detalles de la Evaluación Clínica:",
+                "safety_note": "💡 **Nota:** Consulte a su proveedor de atención médica antes de cambiar su dosis.",
+                "explain_btn": "🗣️ Explicar en Español Sencillo",
+                "generating": "Generando explicación en español..."
+            }
+        }
+
+        t = TRANSLATIONS[selected_lang]
+
+        st.markdown(f"""
         <div class="header-banner">
-            <h2 style="margin:0;">🏥 Universal Multi-Disease & Medication Assister</h2>
-            <p style="margin:5px 0 0 0; opacity:0.9;">Verify treatment safety, target ranges, and personalized dosage adjustments against your latest test reports.</p>
+            <h2 style="margin:0;">🏥 {t['portal_title']}</h2>
+            <p style="margin:5px 0 0 0; opacity:0.9;">{t['portal_sub']}</p>
         </div>
         """, unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("1️⃣ Select Disease & Enter Vitals")
+            st.subheader(t["col1_title"])
             condition = st.selectbox(
-                "Clinical Diagnosis",
+                t["disease_label"],
                 [
                     "Diabetes", "Hypertension", "Thyroid Disorders", 
                     "Hyperlipidemia", "Chronic Kidney Disease", "Asthma / COPD", 
@@ -296,10 +384,9 @@ else:
                 med_options = ["Methotrexate", "Hydroxychloroquine"]
 
         with col2:
-            st.subheader("2️⃣ Current Prescribed Medication")
-            selected_med = st.selectbox("Current Prescribed Drug", med_options, key="pat_med_choice")
+            st.subheader(t["col2_title"])
+            selected_med = st.selectbox(t["med_label"], med_options, key="pat_med_choice")
             
-            # Smart dosage defaults matching standard clinical packaging
             default_map = {
                 "Metformin": 1000.0, "Glimepiride": 2.0, "Gliclazide": 80.0, "Insulin": 20.0,
                 "Amlodipine": 5.0, "Telmisartan": 40.0, "Lisinopril": 10.0,
@@ -313,34 +400,71 @@ else:
                 "Methotrexate": 15.0, "Hydroxychloroquine": 200.0
             }
             default_val = default_map.get(selected_med, 10.0)
-            current_dose_input = st.number_input("Current Prescribed Dosage", 0.0, 3000.0, default_val)
-            patient_egfr_val = st.number_input("Patient eGFR Metric (mL/min, default: 90)", 0, 150, 90)
+            current_dose_input = st.number_input(t["dose_label"], 0.0, 3000.0, default_val)
+            patient_egfr_val = st.number_input(t["egfr_label"], 0, 150, 90)
 
         st.write("---")
-        if st.button("🔍 Evaluate Protocol & Dosage Efficacy", type="primary"):
+        if st.button(t["eval_btn"], type="primary"):
             res = evaluate_disease_management(
                 condition, selected_med, current_dose_input, vitals_payload, egfr=patient_egfr_val
             )
 
-            st.subheader("📊 Evaluation Assessment")
+            st.session_state.last_patient_res = res
+            st.session_state.last_patient_condition = condition
+            st.session_state.last_patient_med = selected_med
+
+        if "last_patient_res" in st.session_state:
+            res = st.session_state.last_patient_res
+            st.subheader(t["results_header"])
             if res["dose_correct"]:
-                st.markdown('<span class="badge-green">✅ CURRENT DOSE IS OPTIMAL & SAFE</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
             else:
                 if "Renal" in res["status"] or "Contraindicated" in res["status"]:
-                    st.markdown('<span class="badge-red">⛔ CONTRAINDICATED / KIDNEY SAFETY WARNING</span>', unsafe_allow_html=True)
+                    st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
                 else:
-                    st.markdown('<span class="badge-yellow">⚠️ ADJUSTMENT / TITRATION RECOMMENDED</span>', unsafe_allow_html=True)
+                    st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
 
             r1, r2 = st.columns(2)
             with r1:
-                st.write(f"**Current Dose:** {res['current_dose_mg']} mg/mcg/Units")
-                st.write(f"**Target-Adjusted Dose:** **{res['recommended_dose_mg']} mg/mcg/Units**")
+                st.write(f"**{t['curr_dose']}** {res['current_dose_mg']} mg/mcg/Units")
+                st.write(f"**{t['rec_dose']}** **{res['recommended_dose_mg']} mg/mcg/Units**")
             with r2:
-                st.write("**Clinical Evaluation Details:**")
+                st.write(f"**{t['details_title']}**")
                 for r in res["reasons"]:
                     st.write(r)
 
-            st.info("💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage.")
+            st.info(t["safety_note"])
+
+            # Multilingual Clinical Explanation via Gemini
+            if st.button(t["explain_btn"]):
+                with st.spinner(t["generating"]):
+                    try:
+                        api_key = st.secrets.get("GEMINI_API_KEY", "")
+                        if api_key:
+                            client = genai.Client(api_key=api_key)
+                            explain_prompt = f"""
+                            You are a friendly, compassionate clinical doctor explaining a test evaluation directly to a patient.
+                            Explain this clinical assessment result clearly in {selected_lang}.
+                            Avoid dense medical jargon. Use simple, conversational words.
+
+                            Details:
+                            - Diagnosis / Condition: {st.session_state.last_patient_condition}
+                            - Medication: {st.session_state.last_patient_med}
+                            - Current Dose: {res['current_dose_mg']} mg/mcg/Units
+                            - Recommended Dose: {res['recommended_dose_mg']} mg/mcg/Units
+                            - Clinical Findings: {' '.join(res['reasons'])}
+
+                            Provide a 3-4 sentence reassurance and instructions on what they should ask their doctor at their next appointment.
+                            """
+                            exp_res = client.models.generate_content(
+                                model="gemini-3.6-flash",
+                                contents=explain_prompt
+                            )
+                            st.success(exp_res.text)
+                        else:
+                            st.warning("GEMINI_API_KEY not configured for dynamic explanations.")
+                    except Exception as e:
+                        st.error(f"Explanation engine error: {str(e)}")
 
     # =========================================================
     # B. CLINICIAN & HOSPITAL GATEWAY (ALL OTHER ENGINES)

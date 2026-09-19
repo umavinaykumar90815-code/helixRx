@@ -104,7 +104,6 @@ DEFAULT_DISEASE_PROTOCOLS = {
 
 def ensure_protocols_exist():
     os.makedirs(os.path.dirname(PROTOCOLS_FILEPATH), exist_ok=True)
-    # Always update or write the file so newly introduced protocols persist
     with open(PROTOCOLS_FILEPATH, "w") as f:
         json.dump(DEFAULT_DISEASE_PROTOCOLS, f, indent=2)
 
@@ -139,7 +138,7 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
     recommended_dose = float(current_dose_mg)
     status = "Therapeutic Target Achieved"
 
-    # Special handling: Atrial Fibrillation with Warfarin titrations
+    # 1. Specialized Titration Logic: Atrial Fibrillation with Warfarin
     if condition == "Atrial Fibrillation" and medication == "Warfarin":
         inr_val = lab_vitals.get("inr")
         if inr_val is not None:
@@ -147,16 +146,16 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
                 dose_correct = False
                 status = "Sub-Optimal Control / Adjustment Recommended"
                 recommended_dose = round(current_dose_mg * 1.15, 1)
-                reasons.append(f"• INR ({inr_val}) is sub-therapeutic (< 2.0). Increase dose by ~15% to prevent stroke.")
+                reasons.append(f"• INR ({inr_val}) is sub-therapeutic (< 2.0). Increase weekly dose by ~15% to prevent thromboembolism.")
             elif inr_val > 3.0:
                 dose_correct = False
                 status = "Supratherapeutic Bleeding Risk"
                 recommended_dose = round(current_dose_mg * 0.85, 1)
                 reasons.append(f"• INR ({inr_val}) exceeds target (> 3.0). High bleeding danger. Reduce dose by ~15%.")
             else:
-                reasons.append(f"• INR ({inr_val}) is in the optimal therapeutic window (2.0 - 3.0).")
+                reasons.append(f"• INR ({inr_val}) is within the optimal therapeutic target (2.0 - 3.0).")
     else:
-        # 1. Biomarker Control Evaluation
+        # Standard Biomarker Control Check
         off_target = False
         for marker, target in targets.items():
             val = lab_vitals.get(marker)
@@ -168,7 +167,7 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
                     off_target = True
                     reasons.append(f"• {marker.upper().replace('_', ' ')} level ({val}) is below target lower limit ({target['min']}).")
 
-        # 2. Dose Titration Logic
+        # Standard Dose Titration Logic
         if off_target:
             dose_correct = False
             status = "Sub-Optimal Control / Adjustment Recommended"
@@ -179,9 +178,9 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
                 recommended_dose = min(max_dose, current_dose_mg + titration)
                 reasons.append(f"• Increase {medication} dosage from {current_dose_mg} to {recommended_dose} mg/mcg/Units daily.")
             elif current_dose_mg >= max_dose:
-                reasons.append(f"• {medication} is at maximum dosage ceiling ({max_dose} mg/mcg/Units). Evaluate multi-drug combination therapy.")
+                reasons.append(f"• {medication} is at maximum dosage ceiling ({max_dose} mg/mcg/Units). Evaluate dual-drug combination therapy.")
 
-    # 3. Renal Clearance Safety Cutoffs
+    # 2. Renal Clearance Safety Cutoffs
     if "renal_cutoff_egfr" in drug_data and egfr < drug_data["renal_cutoff_egfr"]:
         dose_correct = False
         status = "Renal Clearance Safety Risk"
@@ -191,12 +190,12 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
         else:
             reasons.append(f"• eGFR ({egfr} mL/min) is below safety threshold ({drug_data['renal_cutoff_egfr']} mL/min). Dose reduced to {recommended_dose} mg.")
 
-    # 4. Hepatic Safety Cutoff Check
+    # 3. Hepatic Safety Cutoff Check
     if alt > 120.0 and medication in ["Methotrexate", "Atorvastatin"]:
         dose_correct = False
         status = "Hepatic Safety Warning"
         recommended_dose = 0.0
-        reasons.append(f"• Hepatotoxicity alert: Serum ALT is markedly elevated ({alt} U/L). Withhold or stop {medication}.")
+        reasons.append(f"• Hepatotoxicity alert: Serum ALT is markedly elevated ({alt} U/L). Withhold or discontinue {medication}.")
 
     if not reasons:
         reasons.append("• All recorded lab biomarkers are within target clinical ranges. Current dosage is optimal.")
