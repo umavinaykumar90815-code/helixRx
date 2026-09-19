@@ -223,7 +223,7 @@ else:
 
         st.divider()
 
-    # =========================================================
+   # =========================================================
     # A. PATIENT PORTAL (MULTI-DISEASE & MEDICATION ASSISTER)
     # =========================================================
     if st.session_state.user_role == "Patient":
@@ -241,7 +241,9 @@ else:
                 "Clinical Diagnosis",
                 [
                     "Diabetes", "Hypertension", "Thyroid Disorders", 
-                    "Hyperlipidemia", "Chronic Kidney Disease", "Asthma / COPD", "Heart Failure"
+                    "Hyperlipidemia", "Chronic Kidney Disease", "Asthma / COPD", 
+                    "Heart Failure", "Depression / Anxiety", "Gout / Hyperuricemia", 
+                    "Atrial Fibrillation", "Rheumatoid Arthritis"
                 ],
                 key="pat_disease_sel"
             )
@@ -272,16 +274,46 @@ else:
                 vitals_payload["fev1_percent"] = st.number_input("FEV1 (% Predicted)", 0, 120, 65)
                 vitals_payload["peak_flow"] = st.number_input("Peak Expiratory Flow (L/min)", 0, 800, 260)
                 med_options = ["Salbutamol / Albuterol", "Budenoside"]
-            else:  # Heart Failure
+            elif condition == "Heart Failure":
                 vitals_payload["ejection_fraction"] = st.number_input("Left Ventricular Ejection Fraction (%)", 10, 75, 38)
                 vitals_payload["bnp"] = st.number_input("BNP Biomarker (pg/mL)", 0, 5000, 420)
                 med_options = ["Furosemide", "Spironolactone"]
+            elif condition == "Depression / Anxiety":
+                vitals_payload["phq9"] = st.slider("PHQ-9 Depression Severity Score (0-27)", 0, 27, 14)
+                vitals_payload["gad7"] = st.slider("GAD-7 Anxiety Score (0-21)", 0, 21, 10)
+                med_options = ["Sertraline", "Escitalopram", "Venlafaxine"]
+            elif condition == "Gout / Hyperuricemia":
+                vitals_payload["uric_acid"] = st.number_input("Serum Uric Acid (mg/dL)", 2.0, 16.0, 8.4, step=0.1)
+                vitals_payload["flares_per_year"] = st.number_input("Acute Attacks in Last 12 Mos", 0, 20, 3)
+                med_options = ["Allopurinol", "Febuxostat", "Colchicine"]
+            elif condition == "Atrial Fibrillation":
+                vitals_payload["inr"] = st.number_input("International Normalized Ratio (INR)", 0.8, 6.0, 1.8, step=0.1)
+                vitals_payload["cha2ds2_vasc"] = st.slider("CHA2DS2-VASc Stroke Risk Score", 0, 9, 3)
+                med_options = ["Apixaban", "Rivaroxaban", "Warfarin"]
+            else:  # Rheumatoid Arthritis
+                vitals_payload["crp"] = st.number_input("C-Reactive Protein - CRP (mg/L)", 0.0, 100.0, 18.5, step=0.1)
+                vitals_payload["esr"] = st.number_input("Erythrocyte Sedimentation Rate - ESR (mm/hr)", 0, 120, 35)
+                med_options = ["Methotrexate", "Hydroxychloroquine"]
 
         with col2:
             st.subheader("2️⃣ Current Prescribed Medication")
             selected_med = st.selectbox("Current Prescribed Drug", med_options, key="pat_med_choice")
-            default_dose = 1000.0 if selected_med == "Metformin" else (50.0 if selected_med == "Levothyroxine" else 10.0)
-            current_dose_input = st.number_input("Current Prescribed Dosage", 0.0, 3000.0, default_dose)
+            
+            # Smart dosage defaults matching standard clinical packaging
+            default_map = {
+                "Metformin": 1000.0, "Glimepiride": 2.0, "Gliclazide": 80.0, "Insulin": 20.0,
+                "Amlodipine": 5.0, "Telmisartan": 40.0, "Lisinopril": 10.0,
+                "Levothyroxine": 50.0, "Methimazole": 10.0,
+                "Atorvastatin": 20.0, "Rosuvastatin": 10.0, "Fenofibrate": 145.0,
+                "Allopurinol": 100.0, "Febuxostat": 40.0, "Colchicine": 0.5,
+                "Dapagliflozin": 10.0, "Salbutamol / Albuterol": 100.0, "Budenoside": 200.0,
+                "Furosemide": 40.0, "Spironolactone": 25.0,
+                "Sertraline": 50.0, "Escitalopram": 10.0, "Venlafaxine": 75.0,
+                "Apixaban": 5.0, "Rivaroxaban": 20.0, "Warfarin": 5.0,
+                "Methotrexate": 15.0, "Hydroxychloroquine": 200.0
+            }
+            default_val = default_map.get(selected_med, 10.0)
+            current_dose_input = st.number_input("Current Prescribed Dosage", 0.0, 3000.0, default_val)
             patient_egfr_val = st.number_input("Patient eGFR Metric (mL/min, default: 90)", 0, 150, 90)
 
         st.write("---")

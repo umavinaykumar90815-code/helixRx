@@ -64,11 +64,47 @@ DEFAULT_DISEASE_PROTOCOLS = {
             "Furosemide": {"standard_dose": 40.0, "max_dose": 240.0, "titration_step": 20.0},
             "Spironolactone": {"standard_dose": 25.0, "max_dose": 50.0, "renal_cutoff_egfr": 30, "adjusted_dose": 0.0}
         }
+    },
+    "Depression / Anxiety": {
+        "biomarkers": ["phq9", "gad7"],
+        "targets": {"phq9": {"max": 9}, "gad7": {"max": 7}},
+        "drugs": {
+            "Sertraline": {"standard_dose": 50.0, "max_dose": 200.0, "titration_step": 50.0},
+            "Escitalopram": {"standard_dose": 10.0, "max_dose": 20.0, "titration_step": 10.0},
+            "Venlafaxine": {"standard_dose": 75.0, "max_dose": 225.0, "titration_step": 75.0}
+        }
+    },
+    "Gout / Hyperuricemia": {
+        "biomarkers": ["uric_acid", "flares_per_year"],
+        "targets": {"uric_acid": {"max": 6.0}, "flares_per_year": {"max": 0}},
+        "drugs": {
+            "Allopurinol": {"standard_dose": 100.0, "max_dose": 600.0, "titration_step": 100.0, "renal_cutoff_egfr": 30, "adjusted_dose": 50.0},
+            "Febuxostat": {"standard_dose": 40.0, "max_dose": 80.0, "titration_step": 40.0, "renal_cutoff_egfr": 30, "adjusted_dose": 40.0},
+            "Colchicine": {"standard_dose": 0.5, "max_dose": 1.0, "titration_step": 0.5, "renal_cutoff_egfr": 30, "adjusted_dose": 0.3}
+        }
+    },
+    "Atrial Fibrillation": {
+        "biomarkers": ["inr", "cha2ds2_vasc"],
+        "targets": {"inr": {"min": 2.0, "max": 3.0}},
+        "drugs": {
+            "Warfarin": {"standard_dose": 5.0, "max_dose": 15.0, "titration_step": 1.0},
+            "Apixaban": {"standard_dose": 5.0, "max_dose": 5.0, "renal_cutoff_egfr": 30, "adjusted_dose": 2.5},
+            "Rivaroxaban": {"standard_dose": 20.0, "max_dose": 20.0, "renal_cutoff_egfr": 50, "adjusted_dose": 15.0}
+        }
+    },
+    "Rheumatoid Arthritis": {
+        "biomarkers": ["crp", "esr"],
+        "targets": {"crp": {"max": 5.0}, "esr": {"max": 20}},
+        "drugs": {
+            "Methotrexate": {"standard_dose": 15.0, "max_dose": 25.0, "titration_step": 2.5, "renal_cutoff_egfr": 30, "adjusted_dose": 0.0},
+            "Hydroxychloroquine": {"standard_dose": 200.0, "max_dose": 400.0, "titration_step": 100.0}
+        }
     }
 }
 
 def ensure_protocols_exist():
     os.makedirs(os.path.dirname(PROTOCOLS_FILEPATH), exist_ok=True)
+    # Always update or write the file so newly introduced protocols persist
     with open(PROTOCOLS_FILEPATH, "w") as f:
         json.dump(DEFAULT_DISEASE_PROTOCOLS, f, indent=2)
 
@@ -103,32 +139,49 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
     recommended_dose = float(current_dose_mg)
     status = "Therapeutic Target Achieved"
 
-    # 1. Biomarker Control Check
-    off_target = False
-    for marker, target in targets.items():
-        val = lab_vitals.get(marker)
-        if val is not None:
-            if "max" in target and val > target["max"]:
-                off_target = True
-                reasons.append(f"• {marker.upper().replace('_', ' ')} level ({val}) exceeds target upper limit ({target['max']}).")
-            elif "min" in target and val < target["min"]:
-                off_target = True
-                reasons.append(f"• {marker.upper().replace('_', ' ')} level ({val}) is below target lower limit ({target['min']}).")
+    # Special handling: Atrial Fibrillation with Warfarin titrations
+    if condition == "Atrial Fibrillation" and medication == "Warfarin":
+        inr_val = lab_vitals.get("inr")
+        if inr_val is not None:
+            if inr_val < 2.0:
+                dose_correct = False
+                status = "Sub-Optimal Control / Adjustment Recommended"
+                recommended_dose = round(current_dose_mg * 1.15, 1)
+                reasons.append(f"• INR ({inr_val}) is sub-therapeutic (< 2.0). Increase dose by ~15% to prevent stroke.")
+            elif inr_val > 3.0:
+                dose_correct = False
+                status = "Supratherapeutic Bleeding Risk"
+                recommended_dose = round(current_dose_mg * 0.85, 1)
+                reasons.append(f"• INR ({inr_val}) exceeds target (> 3.0). High bleeding danger. Reduce dose by ~15%.")
+            else:
+                reasons.append(f"• INR ({inr_val}) is in the optimal therapeutic window (2.0 - 3.0).")
+    else:
+        # 1. Biomarker Control Evaluation
+        off_target = False
+        for marker, target in targets.items():
+            val = lab_vitals.get(marker)
+            if val is not None:
+                if "max" in target and val > target["max"]:
+                    off_target = True
+                    reasons.append(f"• {marker.upper().replace('_', ' ')} level ({val}) exceeds target upper limit ({target['max']}).")
+                elif "min" in target and val < target["min"]:
+                    off_target = True
+                    reasons.append(f"• {marker.upper().replace('_', ' ')} level ({val}) is below target lower limit ({target['min']}).")
 
-    # 2. Dose Titration Logic
-    if off_target:
-        dose_correct = False
-        status = "Sub-Optimal Control / Adjustment Recommended"
-        titration = drug_data.get("titration_step", 0.0)
-        max_dose = drug_data.get("max_dose", current_dose_mg)
-        
-        if current_dose_mg < max_dose and titration > 0:
-            recommended_dose = min(max_dose, current_dose_mg + titration)
-            reasons.append(f"• Increase {medication} dosage from {current_dose_mg} to {recommended_dose} mg/mcg/Units daily.")
-        elif current_dose_mg >= max_dose:
-            reasons.append(f"• {medication} is at maximum dosage ceiling ({max_dose} mg/mcg/Units). Evaluate dual-drug combination therapy.")
+        # 2. Dose Titration Logic
+        if off_target:
+            dose_correct = False
+            status = "Sub-Optimal Control / Adjustment Recommended"
+            titration = drug_data.get("titration_step", 0.0)
+            max_dose = drug_data.get("max_dose", current_dose_mg)
+            
+            if current_dose_mg < max_dose and titration > 0:
+                recommended_dose = min(max_dose, current_dose_mg + titration)
+                reasons.append(f"• Increase {medication} dosage from {current_dose_mg} to {recommended_dose} mg/mcg/Units daily.")
+            elif current_dose_mg >= max_dose:
+                reasons.append(f"• {medication} is at maximum dosage ceiling ({max_dose} mg/mcg/Units). Evaluate multi-drug combination therapy.")
 
-    # 3. Renal Safety Cutoffs
+    # 3. Renal Clearance Safety Cutoffs
     if "renal_cutoff_egfr" in drug_data and egfr < drug_data["renal_cutoff_egfr"]:
         dose_correct = False
         status = "Renal Clearance Safety Risk"
@@ -137,6 +190,13 @@ def evaluate_disease_management(condition, medication, current_dose_mg, lab_vita
             reasons.append(f"• CONTRAINDICATED: eGFR ({egfr} mL/min) is below safety threshold ({drug_data['renal_cutoff_egfr']} mL/min). Discontinue {medication}.")
         else:
             reasons.append(f"• eGFR ({egfr} mL/min) is below safety threshold ({drug_data['renal_cutoff_egfr']} mL/min). Dose reduced to {recommended_dose} mg.")
+
+    # 4. Hepatic Safety Cutoff Check
+    if alt > 120.0 and medication in ["Methotrexate", "Atorvastatin"]:
+        dose_correct = False
+        status = "Hepatic Safety Warning"
+        recommended_dose = 0.0
+        reasons.append(f"• Hepatotoxicity alert: Serum ALT is markedly elevated ({alt} U/L). Withhold or stop {medication}.")
 
     if not reasons:
         reasons.append("• All recorded lab biomarkers are within target clinical ranges. Current dosage is optimal.")
