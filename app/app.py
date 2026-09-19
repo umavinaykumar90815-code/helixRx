@@ -3,6 +3,7 @@ import os
 import sys
 import numpy as np
 import plotly.graph_objects as go
+from google import genai
 from datetime import datetime
 
 # Add project root to sys.path
@@ -95,41 +96,65 @@ def logout():
     st.rerun()
 
 # -------------------------------------------------------------
-# CLINICAL AI ASSISTANT (FLOATING MODAL)
+# LIVE GEMINI CLINICAL AI ASSISTANT (PERSISTENT MODAL)
 # -------------------------------------------------------------
-@st.dialog("💬 HelixRx Clinical AI Assistant")
+@st.dialog("💬 HelixRx Clinical AI Assistant", width="large")
 def show_ai_assistant_dialog():
-    st.caption("Ask questions regarding your medications, genetic markers, or organ clearance values.")
-    
+    st.caption("HelixRx Real-Time Precision AI. Ask any clinical, dosage, or genomic questions freely.")
+
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
-            {"role": "assistant", "content": "Hello! I am your HelixRx Clinical Assistant. Ask me about drug dosing, kidney/liver thresholds, or genetic guidelines (CPIC/FDA)."}
+            {
+                "role": "assistant",
+                "content": "Hello! I am your HelixRx Clinical Assistant. Ask me anything about medications, genetic markers, renal/hepatic thresholds, or drug-drug interactions."
+            }
         ]
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    # Container for chat messages to allow proper scrolling
+    chat_container = st.container(height=380)
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
 
-    user_prompt = st.chat_input("Ask a clinical or dosage question...")
+    # Input field (no st.rerun() needed — Streamlit automatically re-renders the dialog)
+    user_prompt = st.chat_input("Type your question here...")
     if user_prompt:
         st.session_state.chat_history.append({"role": "user", "content": user_prompt})
-        
-        prompt_lower = user_prompt.lower()
-        if "egfr" in prompt_lower or "kidney" in prompt_lower:
-            reply = "eGFR assesses kidney function. Normal baseline is ≥90 mL/min/1.73m². An eGFR under 60 indicates impairment, often requiring dose adjustments for renally cleared medications."
-        elif "alt" in prompt_lower or "liver" in prompt_lower:
-            reply = "ALT (alanine aminotransferase) evaluates liver integrity. Normal levels are ≤40 U/L. Elevated ALT signals hepatic stress, which slows down hepatic drug metabolism."
-        elif "cyp2c19" in prompt_lower or "clopidogrel" in prompt_lower:
-            reply = "CYP2C19 bioactivates Clopidogrel (Plavix). Poor metabolizers (*2/*2) fail to produce sufficient active antiplatelet compound, drastically increasing thrombosis risk. Alternative agents like Ticagrelor or Prasugrel are recommended."
-        elif "metformin" in prompt_lower:
-            reply = "Metformin is a first-line biguanide for Type 2 Diabetes. It is strictly contraindicated if eGFR < 30 mL/min due to the risk of fatal lactic acidosis."
-        elif "cadd" in prompt_lower or "ml" in prompt_lower:
-            reply = "The ML Random Forest predictor uses structural and evolutionary scores (CADD, PolyPhen-2, SIFT, PhyloP) to classify novel variants as either Loss-of-Function (pathogenic) or Tolerated (benign)."
-        else:
-            reply = "HelixRx cross-references your DNA sequence and organ clearance vitals with CPIC Level A/B and FDA guidelines. Always consult your attending clinician before making any changes to prescriptions."
+        with chat_container:
+            with st.chat_message("user"):
+                st.write(user_prompt)
+
+        # System prompt to give the AI expert clinical context
+        system_instruction = (
+            "You are HelixRx AI, an expert clinical pharmacogenomics (PGx) and medication safety assistant. "
+            "Provide accurate, clear, and helpful answers regarding medications, dosages, organ clearance (eGFR, ALT), "
+            "and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
+            "while maintaining clinical accuracy. Always include a brief reminder to consult their healthcare provider."
+        )
+
+        try:
+            api_key = st.secrets.get("GEMINI_API_KEY", "")
+            if not api_key:
+                reply = "⚠️ API Key not configured. Please add `GEMINI_API_KEY` to your Streamlit Cloud Secrets."
+            else:
+                client = genai.Client(api_key=api_key)
+                
+                # Convert history to prompt context
+                full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=full_prompt,
+                )
+                reply = response.text
+
+        except Exception as e:
+            reply = f"⚠️ Clinical engine connection error: {str(e)}"
 
         st.session_state.chat_history.append({"role": "assistant", "content": reply})
-        st.rerun()
+        with chat_container:
+            with st.chat_message("assistant"):
+                st.write(reply)
 
 # =============================================================
 # 1. LOGIN GATEWAY (UNAUTHENTICATED VIEW)
