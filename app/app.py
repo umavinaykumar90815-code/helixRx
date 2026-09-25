@@ -221,7 +221,7 @@ else:
         st.divider()
 
     # =========================================================
-    # A. PATIENT PORTAL (MULTI-DISEASE & MULTILINGUAL ASSISTER)
+    # A. PATIENT PORTAL (MULTI-DISEASE, TUTORIAL & MULTILINGUAL)
     # =========================================================
     if st.session_state.user_role == "Patient":
         selected_lang = st.sidebar.selectbox("🌐 Choose Language / భాష / भाषा", ["English", "Telugu", "Hindi", "Spanish"])
@@ -230,6 +230,18 @@ else:
             "English": {
                 "portal_title": "Universal Multi-Disease & Medication Assister",
                 "portal_sub": "Verify treatment safety, target ranges, and personalized dosage adjustments against your latest test reports.",
+                "guide_title": "📖 How to Use HelixRx (Quick User Manual)",
+                "step1_title": "Step 1: Select Your Condition",
+                "step1_desc": "Choose your diagnosed chronic illness from the dropdown menu (e.g., Diabetes, Hypertension, Thyroid).",
+                "step2_title": "Step 2: Enter Lab Test Vitals",
+                "step2_desc": "Type in your latest blood or biomarker values from your diagnostic lab report (e.g., Fasting Sugar, HbA1c, Blood Pressure).",
+                "step3_title": "Step 3: Confirm Your Medication & Dose",
+                "step3_desc": "Select the tablet or medicine you currently take and enter the exact prescribed strength (mg, mcg, or units).",
+                "step4_title": "Step 4: Check Organ Safety & Evaluate",
+                "step4_desc": "Enter your kidney eGFR number (standard is ~90). Click 'Evaluate Protocol' to see if your dosage matches safety guidelines.",
+                "step5_title": "Step 5: Get AI Explanations",
+                "step5_desc": "Click 'Explain in Plain Language' or open the HelixRx AI Assistant to ask questions in your language.",
+                "privacy_note": "🔒 All input data is processed strictly in your local session and remains confidential.",
                 "col1_title": "1️⃣ Select Disease & Enter Vitals",
                 "disease_label": "Clinical Diagnosis",
                 "col2_title": "2️⃣ Current Prescribed Medication",
@@ -251,6 +263,18 @@ else:
             "Telugu": {
                 "portal_title": "సార్వత్రిక బహుళ-వ్యాధులు & ఔషధ సహాయకం",
                 "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన మోతాదును ధృవీకరించండి.",
+                "guide_title": "📖 హెలిక్స్-ఆర్‌ఎక్స్ ఎలా ఉపయోగించాలి? (వినియోగదారు మార్గదర్శి)",
+                "step1_title": "దశ 1: మీ ఆరోగ్య సమస్యను ఎంచుకోండి",
+                "step1_desc": "డ్రాప్‌డౌన్ మెను నుండి మీ వ్యాధిని ఎంచుకోండి (ఉదా: డయాబెటిస్, రక్తపోటు, థైరాయిడ్ మొదలైనవి).",
+                "step2_title": "దశ 2: పరీక్ష వివరాలను నమోదు చేయండి",
+                "step2_desc": "మీ తాజా ల్యాబ్ రిపోర్ట్ నుండి రక్తంలో చక్కెర, HbA1c లేదా రక్తపోటు రీడింగ్‌లను నమోదు చేయండి.",
+                "step3_title": "దశ 3: మీ మందు మరియు మోతాదును ఎంచుకోండి",
+                "step3_desc": "మీరు ప్రస్తుతం వాడుతున్న మందు పేరు మరియు డాక్టర్ సూచించిన మోతాదు (mg/mcg) పేర్కొనండి.",
+                "step4_title": "దశ 4: కిడ్నీ భద్రత మరియు మోతాదు మూల్యాంకనం",
+                "step4_desc": "మీ కిడ్నీ eGFR సంఖ్యను ఎంటర్ చేసి, 'ప్రోటోకాల్ అంచనా వేయండి' బటన్ నొక్కండి. మీ మోతాదు సరైనదో కాదో తెలుస్తుంది.",
+                "step5_title": "దశ 5: సులభమైన వివరణ & AI సహాయం",
+                "step5_desc": "'సులభమైన తెలుగులో వివరణ' పై క్లిక్ చేయండి లేదా ఏవైనా సందేహాల కోసం AI అసిస్టెంట్‌తో తెలుగులో మాట్లాడండి.",
+                "privacy_note": "🔒 నమోదు చేసిన సమాచారం మీ బ్రౌజర్ సెషన్‌లో మాత్రమే భద్రంగా మరియు ప్రైవేట్‌గా ఉంటుంది.",
                 "col1_title": "1️⃣ వ్యాధిని ఎంచుకుని వివరాలను నమోదు చేయండి",
                 "disease_label": "క్లినికల్ రోగనిర్ధారణ",
                 "col2_title": "2️⃣ ప్రస్తుత సూచించిన మందు",
@@ -272,6 +296,18 @@ else:
             "Hindi": {
                 "portal_title": "सार्वभौमिक बहु-रोग और दवा सहायक",
                 "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और व्यक्तिगत खुराक समायोजन की जाँच करें।",
+                "guide_title": "📖 उपयोग कैसे करें (त्वरित उपयोगकर्ता गाइड)",
+                "step1_title": "चरण 1: अपनी बीमारी चुनें",
+                "step1_desc": "ड्रॉपडाउन सूची से अपनी बीमारी का चयन करें (जैसे: मधुमेह/शुगर, उच्च रक्तचाप, थायराइड)।",
+                "step2_title": "चरण 2: परीक्षण रिपोर्ट का विवरण दर्ज करें",
+                "step2_desc": "अपनी नवीनतम लैब रिपोर्ट से रक्त शर्करा (FBS/PPBS), HbA1c या बीपी का सटीक मान भरें।",
+                "step3_title": "चरण 3: अपनी वर्तमान दवा और खुराक चुनें",
+                "step3_desc": "जो दवा आप ले रहे हैं उसे चुनें और डॉक्टर द्वारा बताई गई खुराक (mg/mcg) दर्ज करें।",
+                "step4_title": "चरण 4: सुरक्षा जांच और मूल्यांकन",
+                "step4_desc": "किडनी eGFR दर्ज करें और 'मूल्यांकन करें' पर क्लिक करें। सिस्टम जांचेगा कि खुराक सुरक्षित है या नहीं।",
+                "step5_title": "चरण 5: सरल भाषा में स्पष्टीकरण",
+                "step5_desc": "'सरल हिंदी में स्पष्टीकरण' बटन दबाएं या AI सहायक से अपनी भाषा में कोई भी सवाल पूछें।",
+                "privacy_note": "🔒 आपका दर्ज किया गया डेटा पूरी तरह से सुरक्षित और गोपनीय है।",
                 "col1_title": "1️⃣ रोग चुनें और स्वास्थ्य विवरण दर्ज करें",
                 "disease_label": "चिकित्सीय निदान (Diagnosis)",
                 "col2_title": "2️⃣ वर्तमान निर्धारित दवा",
@@ -293,6 +329,18 @@ else:
             "Spanish": {
                 "portal_title": "Asistente Universal de Enfermedades y Medicamentos",
                 "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis personalizados con sus últimos análisis.",
+                "guide_title": "📖 Guía de Inicio Rápido (Manual de Usuario)",
+                "step1_title": "Paso 1: Seleccione su Condición",
+                "step1_desc": "Elija su enfermedad en el menú desplegable (por ejemplo, Diabetes, Hipertensión, Tiroides).",
+                "step2_title": "Paso 2: Ingrese sus Resultados de Laboratorio",
+                "step2_desc": "Escriba sus valores de análisis más recientes (glucosa, HbA1c, presión arterial, etc.).",
+                "step3_title": "Paso 3: Confirme su Medicamento y Dosis",
+                "step3_desc": "Seleccione el fármaco prescrito e introduzca los miligramos (mg) diarios que toma actualmente.",
+                "step4_title": "Paso 4: Evaluación y Seguridad Renal",
+                "step4_desc": "Ingrese el filtrado glomerular (eGFR) y haga clic en 'Evaluar' para verificar la seguridad.",
+                "step5_title": "Paso 5: Explicación con Inteligencia Artificial",
+                "step5_desc": "Presione 'Explicar en Español' o consulte al Asistente Clínico AI ante cualquier inquietud.",
+                "privacy_note": "🔒 Toda la información ingresada se procesa localmente y es estrictamente confidencial.",
                 "col1_title": "1️⃣ Seleccione Enfermedad e Ingrese Parámetros",
                 "disease_label": "Diagnóstico Clínico",
                 "col2_title": "2️⃣ Medicamento Prescrito Actual",
@@ -315,12 +363,32 @@ else:
 
         t = TRANSLATIONS[selected_lang]
 
+        # Header Title Banner
         st.markdown(f"""
         <div class="header-banner">
             <h2 style="margin:0;">🏥 {t['portal_title']}</h2>
             <p style="margin:5px 0 0 0; opacity:0.9;">{t['portal_sub']}</p>
         </div>
         """, unsafe_allow_html=True)
+
+        # Onboarding Tutorial / User Guide Expander
+        with st.expander(f"{t['guide_title']}", expanded=True):
+            m_col1, m_col2, m_col3 = st.columns(3)
+            with m_col1:
+                st.markdown(f"**{t['step1_title']}**")
+                st.caption(t['step1_desc'])
+                st.markdown(f"**{t['step2_title']}**")
+                st.caption(t['step2_desc'])
+            with m_col2:
+                st.markdown(f"**{t['step3_title']}**")
+                st.caption(t['step3_desc'])
+                st.markdown(f"**{t['step4_title']}**")
+                st.caption(t['step4_desc'])
+            with m_col3:
+                st.markdown(f"**{t['step5_title']}**")
+                st.caption(t['step5_desc'])
+                st.markdown("---")
+                st.caption(t['privacy_note'])
 
         col1, col2 = st.columns(2)
         with col1:
@@ -435,7 +503,7 @@ else:
 
             st.info(t["safety_note"])
 
-            # Multilingual Clinical Explanation via Gemini
+            # Multilingual Plain-Language Medical Explanation via Gemini
             if st.button(t["explain_btn"]):
                 with st.spinner(t["generating"]):
                     try:
