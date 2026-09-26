@@ -1,6 +1,6 @@
 """
 HelixRx Universal Clinical Engine
-Comprehensive rule-based clinical decision support across 11 chronic conditions.
+Comprehensive clinical decision support across 11 chronic conditions.
 Handles dynamic auto-titration, renal/hepatic safety thresholds,
 and meal-by-meal administration schedule generation.
 """
@@ -10,7 +10,9 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
     Translates raw dose titration numbers into practical, meal-by-meal instructions
     (Breakfast, Lunch, Dinner) along with explicit administration guidance.
     """
-    d_name = drug_name.lower()
+    d_name = str(drug_name).lower()
+    current_dose = float(current_dose)
+    recommended_dose = float(recommended_dose)
     
     # 1. Metformin
     if "metformin" in d_name:
@@ -229,7 +231,9 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     recommended_dose = float(current_dose)
     status = "Optimal"
     dose_correct = True
-    d_lower = drug_name.lower()
+    d_lower = str(drug_name).lower()
+    egfr = float(egfr)
+    alt = float(alt)
 
     # -------------------------------------------------------------
     # 1. TYPE 2 DIABETES
@@ -240,7 +244,6 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
         hba1c = vitals.get("hba1c", 6.5)
 
         if "metformin" in d_lower:
-            # Renal Cutoffs
             if egfr < 30:
                 recommended_dose = 0.0
                 status = "Contraindicated / Renal Risk"
@@ -253,7 +256,6 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                     dose_correct = False
                     reasons.append(f"Renal Impairment (eGFR {egfr} mL/min): Metformin dosage capped at 1000 mg/day max.")
             else:
-                # Efficacy Titration
                 if hba1c > 7.0 or fbs > 130 or ppbs > 180:
                     if current_dose < 2000:
                         recommended_dose = min(current_dose + 500, 2000)
@@ -583,7 +585,6 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 reasons.append(f"INR is within therapeutic window (2.0 - 3.0). Dosing is optimal.")
 
         elif "apixaban" in d_lower:
-            # FDA criteria: 2 of 3 (Age >=80, Weight <=60kg, Serum Cr >=1.5) -> reduce to 2.5 mg BID
             if egfr < 25:
                 recommended_dose = 2.5
                 status = "Renal Dose Adjustment"
