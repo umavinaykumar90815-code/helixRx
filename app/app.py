@@ -17,7 +17,7 @@ from engine.drug_interaction import analyze_polypharmacy
 from engine.ml_predictor import VariantImpactPredictor
 from engine.report_parser import parse_medical_report
 from engine.dosage_engine import calculate_dosage_adjustment
-from engine.universal_clinical_engine import evaluate_disease_management
+from engine.universal_clinical_engine import evaluate_disease_management, generate_meal_titration_instruction
 from utils import generate_pdf_report
 
 # MUST be the first Streamlit command called in the script
@@ -124,7 +124,7 @@ def show_ai_assistant_dialog():
         st.session_state.chat_history = [
             {
                 "role": "assistant",
-                "content": "Hello! I am your HelixRx Clinical Assistant. Ask me anything about medications, genetic markers, renal/hepatic thresholds, or drug-drug interactions in your preferred language."
+                "content": "Hello! I am your HelixRx Clinical Assistant. Ask me anything about medications, dosages, meal schedules, renal/hepatic thresholds, or drug interactions in your preferred language."
             }
         ]
 
@@ -144,8 +144,8 @@ def show_ai_assistant_dialog():
         system_instruction = (
             "You are HelixRx AI, an expert multilingual clinical pharmacogenomics (PGx) and medication safety assistant. "
             "Respond naturally in whatever language the user asks their question in (e.g., English, Telugu, Hindi, Spanish). "
-            "Provide clear, clinically accurate answers regarding medications, dosages, organ clearance (eGFR, ALT), "
-            "and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
+            "Provide clear, clinically accurate answers regarding medications, dosages, meal administration timing (Breakfast, Lunch, Dinner), "
+            "organ clearance (eGFR, ALT), and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
             "while maintaining strict medical accuracy. Always include a brief reminder to consult their healthcare provider."
         )
 
@@ -239,7 +239,7 @@ else:
         st.divider()
 
     # =========================================================
-    # A. PATIENT PORTAL (INTERACTIVE CLICK & LEARN WALKTHROUGH)
+    # A. PATIENT PORTAL (MULTI-DRUG & MEAL-BY-MEAL ASSISTANCE)
     # =========================================================
     if st.session_state.user_role == "Patient":
         selected_lang = st.sidebar.selectbox("🌐 Choose Language / భాష / भाषा", ["English", "Telugu", "Hindi", "Spanish"])
@@ -253,125 +253,125 @@ else:
         TRANSLATIONS = {
             "English": {
                 "portal_title": "Universal Multi-Disease & Medication Assister",
-                "portal_sub": "Verify treatment safety, target ranges, and personalized dosage adjustments against your latest test reports.",
+                "portal_sub": "Verify treatment safety, target ranges, and meal-by-meal dosage adjustments against your latest test reports.",
                 "start_tour_btn": "🎯 Start Interactive Step-by-Step Tour",
                 "stop_tour_btn": "✖ Exit Tour",
                 "step1_tip": "👇 STEP 1: Select your chronic condition from this dropdown.",
                 "step2_tip": "👇 STEP 2: Enter your latest lab test results here.",
-                "step3_tip": "👉 STEP 3: Select your prescribed drug and enter your current dose.",
+                "step3_tip": "👉 STEP 3: Select all medicines you take and enter each daily dosage.",
                 "step4_tip": "👇 STEP 4: Input your kidney eGFR (default 90) and click this button to evaluate!",
-                "step5_tip": "👇 STEP 5: Review your results and click here for plain-language AI explanation!",
+                "step5_tip": "👇 STEP 5: Review your meal plan below and click here for plain-language AI explanation!",
                 "next_btn": "Next Step ➡️",
                 "prev_btn": "⬅️ Back",
                 "finish_tour": "🎉 Finish Tour",
                 "col1_title": "1️⃣ Select Disease & Enter Vitals",
                 "disease_label": "Clinical Diagnosis",
-                "col2_title": "2️⃣ Current Prescribed Medication",
-                "med_label": "Current Prescribed Drug",
-                "dose_label": "Current Prescribed Dosage",
+                "col2_title": "2️⃣ Current Prescribed Medication(s)",
+                "med_label": "Select All Medicines You Take for this Condition:",
                 "egfr_label": "Patient eGFR Metric (mL/min, default: 90)",
-                "eval_btn": "🔍 Evaluate Protocol & Dosage Efficacy",
-                "results_header": "📊 Evaluation Assessment",
+                "eval_btn": "🔍 Evaluate Protocol & Meal-by-Meal Schedule",
+                "results_header": "📊 Evaluation Assessment & Meal Administration Schedule",
                 "safe_badge": "✅ CURRENT DOSE IS OPTIMAL & SAFE",
                 "warn_badge": "⚠️ ADJUSTMENT / TITRATION RECOMMENDED",
                 "contra_badge": "⛔ CONTRAINDICATED / KIDNEY SAFETY WARNING",
-                "curr_dose": "Current Dose:",
+                "curr_dose": "Current Daily Dose:",
                 "rec_dose": "Target-Adjusted Dose:",
-                "details_title": "Clinical Evaluation Details:",
-                "safety_note": "💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage.",
+                "meal_header": "🍽️ Meal-by-Meal Administration Schedule:",
+                "details_title": "🩺 Clinical Assessment Details:",
+                "safety_note": "💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage or meal timing.",
                 "explain_btn": "🗣️ Explain in Plain Language",
                 "generating": "Generating patient explanation..."
             },
             "Telugu": {
                 "portal_title": "సార్వత్రిక బహుళ-వ్యాధులు & ఔషధ సహాయకం",
-                "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన మోతాదును ధృవీకరించండి.",
+                "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన భోజన సమయాల మోతాదును ధృవీకరించండి.",
                 "start_tour_btn": "🎯 ఇంటరాక్టివ్ గైడెడ్ టూర్ ప్రారంభించండి",
                 "stop_tour_btn": "✖ టూర్ ముగించు",
                 "step1_tip": "👇 దశ 1: ఇక్కడ మీ వ్యాధిని ఎంచుకోండి.",
                 "step2_tip": "👇 దశ 2: మీ తాజా ల్యాబ్ రిపోర్ట్ రీడింగ్‌లను ఇక్కడ నమోదు చేయండి.",
-                "step3_tip": "👉 దశ 3: మీ మందును మరియు సూచించిన మోతాదును ఇక్కడ పేర్కొనండి.",
-                "step4_tip": "👇 దశ 4: కిడ్నీ eGFR విలువ నమోదు చేసి, ఈ మూల్యాంకన బటన్ నొక్కండి!",
-                "step5_tip": "👇 దశ 5: ఫలితాలను చూసి, సులభమైన వివరణ కోసం ఇక్కడ క్లిక్ చేయండి!",
+                "step3_tip": "👉 దశ 3: మీరు వాడుతున్న అన్ని మందులను మరియు వాటి మోతాదులను ఇక్కడ నమోదు చేయండి.",
+                "step4_tip": "👇 దశ 4: కిడ్నీ eGFR నమోదు చేసి, భోజన సమయాల మోతాదును అంచనా వేయడానికి ఇక్కడ క్లిక్ చేయండి!",
+                "step5_tip": "👇 దశ 5: భోజన సమయాల ప్రణాళికను సమీక్షించి, వివరణ కోసం ఇక్కడ క్లిక్ చేయండి!",
                 "next_btn": "తదుపరి దశ ➡️",
                 "prev_btn": "⬅️ వెనుకకు",
                 "finish_tour": "🎉 టూర్ పూర్తయింది",
                 "col1_title": "1️⃣ వ్యాధిని ఎంచుకుని వివరాలను నమోదు చేయండి",
                 "disease_label": "క్లినికల్ రోగనిర్ధారణ",
-                "col2_title": "2️⃣ ప్రస్తుత సూచించిన మందు",
-                "med_label": "ప్రస్తుతం వాడుతున్న మందు",
-                "dose_label": "ప్రస్తుత మోతాదు (Dosage)",
+                "col2_title": "2️⃣ ప్రస్తుతం వాడుతున్న మందు(లు)",
+                "med_label": "ఈ సమస్య కోసం మీరు వాడుతున్న అన్ని మందులను ఎంచుకోండి:",
                 "egfr_label": "రోగి eGFR విలువ (mL/min, సాధారణం: 90)",
-                "eval_btn": "🔍 ప్రోటోకాల్ & మోతాదు సామర్థ్యాన్ని అంచనా వేయండి",
-                "results_header": "📊 మూల్యాంకన ఫలితాలు",
+                "eval_btn": "🔍 ప్రోటోకాల్ & భోజన సమయాల మోతాదును అంచనా వేయండి",
+                "results_header": "📊 మూల్యాంకన ఫలితాలు & భోజన సమయాల ప్రణాళిక",
                 "safe_badge": "✅ ప్రస్తుత మోతాదు సురక్షితమైనది మరియు సరైనది",
                 "warn_badge": "⚠️ మోతాదు సర్దుబాటు సిఫార్సు చేయబడింది",
                 "contra_badge": "⛔ తీవ్రమైన ప్రమాదం / కిడ్నీ భద్రతా హెచ్చరిక",
-                "curr_dose": "ప్రస్తుత మోతాదు:",
+                "curr_dose": "ప్రస్తుత రోజువారీ మోతాదు:",
                 "rec_dose": "సిఫార్సు చేసిన సరైన మోతాదు:",
-                "details_title": "క్లినికల్ మూల్యాంకన వివరాలు:",
-                "safety_note": "💡 **గమనిక:** మీ మోతాదును మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి.",
+                "meal_header": "🍽️ భోజన సమయాల్లో మందులు తీసుకునే విధానం:",
+                "details_title": "🩺 క్లినికల్ మూల్యాంకన వివరాలు:",
+                "safety_note": "💡 **గమనిక:** మీ మోతాదును లేదా సమయాలను మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి.",
                 "explain_btn": "🗣️ సులభమైన తెలుగులో వివరణ పొందండి",
                 "generating": "తెలుగులో వివరణ రూపొందించబడుతోంది..."
             },
             "Hindi": {
                 "portal_title": "सार्वभौमिक बहु-रोग और दवा सहायक",
-                "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और व्यक्तिगत खुराक समायोजन की जाँच करें।",
+                "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और भोजन-वार खुराक समायोजन की जाँच करें।",
                 "start_tour_btn": "🎯 इंटरएक्टिव गाइडेड टूर शुरू करें",
                 "stop_tour_btn": "✖ टूर बंद करें",
                 "step1_tip": "👇 चरण 1: यहाँ अपनी बीमारी का चयन करें।",
                 "step2_tip": "👇 चरण 2: अपनी नवीनतम लैब रिपोर्ट का मान यहाँ भरें।",
-                "step3_tip": "👉 चरण 3: अपनी दवा और वर्तमान खुराक यहाँ चुनें।",
-                "step4_tip": "👇 चरण 4: किडनी eGFR दर्ज करें और खुराक जांचने के लिए यहाँ क्लिक करें!",
-                "step5_tip": "👇 चरण 5: परिणाम देखें और सरल भाषा में समझने के लिए यहाँ क्लिक करें!",
+                "step3_tip": "👉 चरण 3: अपनी सभी दवाएं और उनकी दैनिक खुराक यहाँ दर्ज करें।",
+                "step4_tip": "👇 चरण 4: किडनी eGFR दर्ज करें और खुराक तालिका देखने के लिए यहाँ क्लिक करें!",
+                "step5_tip": "👇 चरण 5: भोजन-वार खुराक देखें और सरल भाषा में समझने के लिए यहाँ क्लिक करें!",
                 "next_btn": "अगला कदम ➡️",
                 "prev_btn": "⬅️ पीछे",
                 "finish_tour": "🎉 टूर पूरा हुआ",
                 "col1_title": "1️⃣ रोग चुनें और स्वास्थ्य विवरण दर्ज करें",
                 "disease_label": "चिकित्सीय निदान (Diagnosis)",
-                "col2_title": "2️⃣ वर्तमान निर्धारित दवा",
-                "med_label": "वर्तमान निर्धारित दवा",
-                "dose_label": "वर्तमान खुराक (Dosage)",
+                "col2_title": "2️⃣ वर्तमान निर्धारित दवा(एं)",
+                "med_label": "इस बीमारी के लिए ली जाने वाली सभी दवाएं चुनें:",
                 "egfr_label": "मरीज का eGFR स्तर (mL/min, डिफ़ॉल्ट: 90)",
-                "eval_btn": "🔍 प्रोटोकॉल और खुराक प्रभावशीलता का मूल्यांकन करें",
-                "results_header": "📊 मूल्यांकन परिणाम",
+                "eval_btn": "🔍 प्रोटोकॉल और भोजन-वार खुराक का मूल्यांकन करें",
+                "results_header": "📊 मूल्यांकन परिणाम और भोजन-वार खुराक तालिका",
                 "safe_badge": "✅ वर्तमान खुराक इष्टतम और सुरक्षित है",
                 "warn_badge": "⚠️ खुराक समायोजन की सिफारिश की गई है",
                 "contra_badge": "⛔ गंभीर चेतावनी / किडनी सुरक्षा जोखिम",
-                "curr_dose": "वर्तमान खुराक:",
+                "curr_dose": "वर्तमान दैनिक खुराक:",
                 "rec_dose": "अनुशंसित समायोजित खुराक:",
-                "details_title": "चिकित्सीय मूल्यांकन विवरण:",
-                "safety_note": "💡 **सुरक्षा नोट:** कृपया अपनी निर्धारित खुराक बदलने से पहले अपने डॉक्टर से परामर्श लें।",
+                "meal_header": "🍽️ भोजन के अनुसार दवा लेने का समय:",
+                "details_title": "🩺 चिकित्सीय मूल्यांकन विवरण:",
+                "safety_note": "💡 **सुरक्षा नोट:** कृपया अपनी निर्धारित खुराक या समय बदलने से पहले अपने डॉक्टर से परामर्श लें।",
                 "explain_btn": "🗣️ सरल हिंदी में स्पष्टीकरण प्राप्त करें",
                 "generating": "हिंदी में विवरण तैयार किया जा रहा है..."
             },
             "Spanish": {
                 "portal_title": "Asistente Universal de Enfermedades y Medicamentos",
-                "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis personalizados con sus últimos análisis.",
+                "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis por comida con sus últimos análisis.",
                 "start_tour_btn": "🎯 Iniciar Tour Guiado Paso a Paso",
                 "stop_tour_btn": "✖ Salir del Tour",
                 "step1_tip": "👇 PASO 1: Seleccione su enfermedad en este menú desplegable.",
                 "step2_tip": "👇 PASO 2: Ingrese aquí los valores de sus análisis de laboratorio.",
-                "step3_tip": "👉 PASO 3: Seleccione su medicamento prescrito y dosis actual.",
+                "step3_tip": "👉 PASO 3: Seleccione todos sus medicamentos e ingrese sus dosis diarias.",
                 "step4_tip": "👇 PASO 4: Ingrese su eGFR y presione este botón para evaluar!",
-                "step5_tip": "👇 PASO 5: Revise los resultados y presione aquí para una explicación sencilla!",
+                "step5_tip": "👇 PASO 5: Revise la administración por comida y presione para una explicación sencilla!",
                 "next_btn": "Siguiente ➡️",
                 "prev_btn": "⬅️ Anterior",
                 "finish_tour": "🎉 Finalizar Tour",
                 "col1_title": "1️⃣ Seleccione Enfermedad e Ingrese Parámetros",
                 "disease_label": "Diagnóstico Clínico",
-                "col2_title": "2️⃣ Medicamento Prescrito Actual",
-                "med_label": "Medicamento Actual",
-                "dose_label": "Dosis Actual Prescrita",
+                "col2_title": "2️⃣ Medicamento(s) Prescrito(s) Actual(es)",
+                "med_label": "Seleccione todos los medicamentos que toma para esta condición:",
                 "egfr_label": "Métrica eGFR del Paciente (mL/min, default: 90)",
-                "eval_btn": "🔍 Evaluar Eficacia de Protocolo y Dosis",
-                "results_header": "📊 Evaluación Clínica",
+                "eval_btn": "🔍 Evaluar Protocolo y Horario por Comida",
+                "results_header": "📊 Evaluación Clínica y Horario de Administración",
                 "safe_badge": "✅ LA DOSIS ACTUAL ES ÓPTIMA Y SEGURA",
                 "warn_badge": "⚠️ SE RECOMIENDA AJUSTE / TITULACIÓN",
                 "contra_badge": "⛔ CONTRAINDICADO / ADVERTENCIA DE SEGURIDAD RENAL",
-                "curr_dose": "Dosis Actual:",
+                "curr_dose": "Dosis Diaria Actual:",
                 "rec_dose": "Dosis Recomendada Ajustada:",
-                "details_title": "Detalles de la Evaluación Clínica:",
-                "safety_note": "💡 **Nota:** Consulte a su proveedor de atención médica antes de cambiar su dosis.",
+                "meal_header": "🍽️ Horario de Administración por Comida:",
+                "details_title": "🩺 Detalles de la Evaluación Clínica:",
+                "safety_note": "💡 **Nota:** Consulte a su proveedor de atención médica antes de cambiar su dosis u horario.",
                 "explain_btn": "🗣️ Explicar en Español Sencillo",
                 "generating": "Generando explicación en español..."
             }
@@ -388,7 +388,7 @@ else:
         """, unsafe_allow_html=True)
 
         # Tour Toggle Button Bar
-        tb_col1, tb_col2 = st.columns([2, 1])
+        tb_col1, _ = st.columns([2, 1])
         with tb_col1:
             if not st.session_state.tutorial_active:
                 if st.button(t["start_tour_btn"], type="primary"):
@@ -500,7 +500,14 @@ else:
             if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
                 st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
 
-            selected_med = st.selectbox(t["med_label"], med_options, key="pat_med_choice")
+            # MULTI-DRUG SELECTION (Patients frequently take multiple meds e.g. Metformin + Glimepiride)
+            default_selection = [med_options[0]] if med_options else []
+            selected_meds = st.multiselect(
+                t["med_label"], 
+                options=med_options, 
+                default=default_selection,
+                key="pat_multi_med_select"
+            )
             
             default_map = {
                 "Metformin": 1000.0, "Glimepiride": 2.0, "Gliclazide": 80.0, "Insulin": 20.0,
@@ -514,8 +521,21 @@ else:
                 "Apixaban": 5.0, "Rivaroxaban": 20.0, "Warfarin": 5.0,
                 "Methotrexate": 15.0, "Hydroxychloroquine": 200.0
             }
-            default_val = default_map.get(selected_med, 10.0)
-            current_dose_input = st.number_input(t["dose_label"], 0.0, 3000.0, default_val)
+
+            patient_doses = {}
+            if selected_meds:
+                for med in selected_meds:
+                    def_val = default_map.get(med, 10.0)
+                    patient_doses[med] = st.number_input(
+                        f"Current Daily Dose for {med} (mg / mcg / Units):",
+                        min_value=0.0,
+                        max_value=3000.0,
+                        value=def_val,
+                        key=f"pat_dose_input_{med}"
+                    )
+            else:
+                st.info("Please select at least one medication from the list above.")
+
             patient_egfr_val = st.number_input(t["egfr_label"], 0, 150, 90)
 
         st.write("---")
@@ -525,32 +545,64 @@ else:
             st.markdown(f'<div class="tutorial-pointer">{t["step4_tip"]}</div>', unsafe_allow_html=True)
 
         if st.button(t["eval_btn"], type="primary"):
-            res = evaluate_disease_management(
-                condition, selected_med, current_dose_input, vitals_payload, egfr=patient_egfr_val
-            )
-            st.session_state.last_patient_res = res
-            st.session_state.last_patient_condition = condition
-            st.session_state.last_patient_med = selected_med
-
-        if "last_patient_res" in st.session_state:
-            res = st.session_state.last_patient_res
-            st.subheader(t["results_header"])
-            if res["dose_correct"]:
-                st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
+            if not selected_meds:
+                st.warning("Please select at least one medication to evaluate.")
             else:
-                if "Renal" in res["status"] or "Contraindicated" in res["status"]:
-                    st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
+                batch_evaluations = []
+                for med in selected_meds:
+                    curr_d = patient_doses.get(med, 0.0)
+                    eval_res = evaluate_disease_management(
+                        condition, med, curr_d, vitals_payload, egfr=patient_egfr_val
+                    )
+                    meal_advice = generate_meal_titration_instruction(
+                        med, curr_d, eval_res["recommended_dose_mg"]
+                    )
+                    eval_res["meal_advice"] = meal_advice
+                    batch_evaluations.append(eval_res)
 
-            r1, r2 = st.columns(2)
-            with r1:
-                st.write(f"**{t['curr_dose']}** {res['current_dose_mg']} mg/mcg/Units")
-                st.write(f"**{t['rec_dose']}** **{res['recommended_dose_mg']} mg/mcg/Units**")
-            with r2:
-                st.write(f"**{t['details_title']}**")
-                for r in res["reasons"]:
-                    st.write(r)
+                st.session_state.last_patient_batch = batch_evaluations
+                st.session_state.last_patient_condition = condition
+
+        # DISPLAY RESULTS WITH FULL MEAL TITRATION GUIDANCE
+        if "last_patient_batch" in st.session_state:
+            st.subheader(t["results_header"])
+
+            for res in st.session_state.last_patient_batch:
+                med_name = res["drug"]
+                adv = res["meal_advice"]
+
+                with st.container(border=True):
+                    # Header with Safety Status
+                    h_col1, h_col2 = st.columns([2.5, 1.5])
+                    with h_col1:
+                        st.markdown(f"### 💊 {med_name}")
+                        st.markdown(f"**{adv['action_text']}**")
+                    with h_col2:
+                        if res["dose_correct"]:
+                            st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
+                        elif "Renal" in res["status"] or "Contraindicated" in res["status"]:
+                            st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
+
+                    st.write("---")
+
+                    m_col1, m_col2 = st.columns([1.6, 1.4])
+                    with m_col1:
+                        st.markdown(f"##### {t['meal_header']}")
+                        st.code(adv['split_plan'], language="text")
+                        st.caption(f"💡 **Administration Rule:** {adv['clinical_note']}")
+                        
+                        r_col1, r_col2 = st.columns(2)
+                        with r_col1:
+                            st.write(f"**{t['curr_dose']}** {res['current_dose_mg']} mg/mcg/Units")
+                        with r_col2:
+                            st.write(f"**{t['rec_dose']}** **{res['recommended_dose_mg']} mg/mcg/Units**")
+
+                    with m_col2:
+                        st.markdown(f"##### {t['details_title']}")
+                        for r in res["reasons"]:
+                            st.write(f"• {r}")
 
             st.info(t["safety_note"])
 
@@ -565,6 +617,16 @@ else:
                         api_key = st.secrets.get("GEMINI_API_KEY", "")
                         if api_key:
                             client = genai.Client(api_key=api_key)
+                            
+                            # Build structured payload across all selected drugs
+                            drugs_summary = []
+                            for r in st.session_state.last_patient_batch:
+                                drugs_summary.append(
+                                    f"- Medication: {r['drug']}, Current: {r['current_dose_mg']}, Recommended: {r['recommended_dose_mg']}\n"
+                                    f"  Meal Plan: {r['meal_advice']['split_plan']}\n"
+                                    f"  Reasons: {' '.join(r['reasons'])}"
+                                )
+                            
                             explain_prompt = f"""
                             You are a friendly, compassionate clinical doctor explaining a test evaluation directly to a patient.
                             Explain this clinical assessment result clearly in {selected_lang}.
@@ -572,12 +634,9 @@ else:
 
                             Details:
                             - Diagnosis / Condition: {st.session_state.last_patient_condition}
-                            - Medication: {st.session_state.last_patient_med}
-                            - Current Dose: {res['current_dose_mg']} mg/mcg/Units
-                            - Recommended Dose: {res['recommended_dose_mg']} mg/mcg/Units
-                            - Clinical Findings: {' '.join(res['reasons'])}
+                            {chr(10).join(drugs_summary)}
 
-                            Provide a 3-4 sentence reassurance and instructions on what they should ask their doctor at their next appointment.
+                            Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
                             """
                             exp_res = client.models.generate_content(
                                 model="gemini-3.6-flash",
