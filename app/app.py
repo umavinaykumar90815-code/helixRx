@@ -68,6 +68,24 @@ st.markdown("""
         display: inline-block;
         border: 1px solid #EF4444;
     }
+
+    /* Pulsing Interactive Tutorial Banner */
+    .tutorial-pointer {
+        background: linear-gradient(90deg, #F59E0B 0%, #D97706 100%);
+        color: white;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+        animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.015); }
+        100% { transform: scale(1); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -221,27 +239,31 @@ else:
         st.divider()
 
     # =========================================================
-    # A. PATIENT PORTAL (MULTI-DISEASE, TUTORIAL & MULTILINGUAL)
+    # A. PATIENT PORTAL (INTERACTIVE CLICK & LEARN WALKTHROUGH)
     # =========================================================
     if st.session_state.user_role == "Patient":
         selected_lang = st.sidebar.selectbox("🌐 Choose Language / భాష / भाषा", ["English", "Telugu", "Hindi", "Spanish"])
+
+        # Session state for interactive step-by-step tour
+        if "tutorial_active" not in st.session_state:
+            st.session_state.tutorial_active = False
+        if "tutorial_step" not in st.session_state:
+            st.session_state.tutorial_step = 1
 
         TRANSLATIONS = {
             "English": {
                 "portal_title": "Universal Multi-Disease & Medication Assister",
                 "portal_sub": "Verify treatment safety, target ranges, and personalized dosage adjustments against your latest test reports.",
-                "guide_title": "📖 How to Use HelixRx (Quick User Manual)",
-                "step1_title": "Step 1: Select Your Condition",
-                "step1_desc": "Choose your diagnosed chronic illness from the dropdown menu (e.g., Diabetes, Hypertension, Thyroid).",
-                "step2_title": "Step 2: Enter Lab Test Vitals",
-                "step2_desc": "Type in your latest blood or biomarker values from your diagnostic lab report (e.g., Fasting Sugar, HbA1c, Blood Pressure).",
-                "step3_title": "Step 3: Confirm Your Medication & Dose",
-                "step3_desc": "Select the tablet or medicine you currently take and enter the exact prescribed strength (mg, mcg, or units).",
-                "step4_title": "Step 4: Check Organ Safety & Evaluate",
-                "step4_desc": "Enter your kidney eGFR number (standard is ~90). Click 'Evaluate Protocol' to see if your dosage matches safety guidelines.",
-                "step5_title": "Step 5: Get AI Explanations",
-                "step5_desc": "Click 'Explain in Plain Language' or open the HelixRx AI Assistant to ask questions in your language.",
-                "privacy_note": "🔒 All input data is processed strictly in your local session and remains confidential.",
+                "start_tour_btn": "🎯 Start Interactive Step-by-Step Tour",
+                "stop_tour_btn": "✖ Exit Tour",
+                "step1_tip": "👇 STEP 1: Select your chronic condition from this dropdown.",
+                "step2_tip": "👇 STEP 2: Enter your latest lab test results here.",
+                "step3_tip": "👉 STEP 3: Select your prescribed drug and enter your current dose.",
+                "step4_tip": "👇 STEP 4: Input your kidney eGFR (default 90) and click this button to evaluate!",
+                "step5_tip": "👇 STEP 5: Review your results and click here for plain-language AI explanation!",
+                "next_btn": "Next Step ➡️",
+                "prev_btn": "⬅️ Back",
+                "finish_tour": "🎉 Finish Tour",
                 "col1_title": "1️⃣ Select Disease & Enter Vitals",
                 "disease_label": "Clinical Diagnosis",
                 "col2_title": "2️⃣ Current Prescribed Medication",
@@ -263,18 +285,16 @@ else:
             "Telugu": {
                 "portal_title": "సార్వత్రిక బహుళ-వ్యాధులు & ఔషధ సహాయకం",
                 "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన మోతాదును ధృవీకరించండి.",
-                "guide_title": "📖 హెలిక్స్-ఆర్‌ఎక్స్ ఎలా ఉపయోగించాలి? (వినియోగదారు మార్గదర్శి)",
-                "step1_title": "దశ 1: మీ ఆరోగ్య సమస్యను ఎంచుకోండి",
-                "step1_desc": "డ్రాప్‌డౌన్ మెను నుండి మీ వ్యాధిని ఎంచుకోండి (ఉదా: డయాబెటిస్, రక్తపోటు, థైరాయిడ్ మొదలైనవి).",
-                "step2_title": "దశ 2: పరీక్ష వివరాలను నమోదు చేయండి",
-                "step2_desc": "మీ తాజా ల్యాబ్ రిపోర్ట్ నుండి రక్తంలో చక్కెర, HbA1c లేదా రక్తపోటు రీడింగ్‌లను నమోదు చేయండి.",
-                "step3_title": "దశ 3: మీ మందు మరియు మోతాదును ఎంచుకోండి",
-                "step3_desc": "మీరు ప్రస్తుతం వాడుతున్న మందు పేరు మరియు డాక్టర్ సూచించిన మోతాదు (mg/mcg) పేర్కొనండి.",
-                "step4_title": "దశ 4: కిడ్నీ భద్రత మరియు మోతాదు మూల్యాంకనం",
-                "step4_desc": "మీ కిడ్నీ eGFR సంఖ్యను ఎంటర్ చేసి, 'ప్రోటోకాల్ అంచనా వేయండి' బటన్ నొక్కండి. మీ మోతాదు సరైనదో కాదో తెలుస్తుంది.",
-                "step5_title": "దశ 5: సులభమైన వివరణ & AI సహాయం",
-                "step5_desc": "'సులభమైన తెలుగులో వివరణ' పై క్లిక్ చేయండి లేదా ఏవైనా సందేహాల కోసం AI అసిస్టెంట్‌తో తెలుగులో మాట్లాడండి.",
-                "privacy_note": "🔒 నమోదు చేసిన సమాచారం మీ బ్రౌజర్ సెషన్‌లో మాత్రమే భద్రంగా మరియు ప్రైవేట్‌గా ఉంటుంది.",
+                "start_tour_btn": "🎯 ఇంటరాక్టివ్ గైడెడ్ టూర్ ప్రారంభించండి",
+                "stop_tour_btn": "✖ టూర్ ముగించు",
+                "step1_tip": "👇 దశ 1: ఇక్కడ మీ వ్యాధిని ఎంచుకోండి.",
+                "step2_tip": "👇 దశ 2: మీ తాజా ల్యాబ్ రిపోర్ట్ రీడింగ్‌లను ఇక్కడ నమోదు చేయండి.",
+                "step3_tip": "👉 దశ 3: మీ మందును మరియు సూచించిన మోతాదును ఇక్కడ పేర్కొనండి.",
+                "step4_tip": "👇 దశ 4: కిడ్నీ eGFR విలువ నమోదు చేసి, ఈ మూల్యాంకన బటన్ నొక్కండి!",
+                "step5_tip": "👇 దశ 5: ఫలితాలను చూసి, సులభమైన వివరణ కోసం ఇక్కడ క్లిక్ చేయండి!",
+                "next_btn": "తదుపరి దశ ➡️",
+                "prev_btn": "⬅️ వెనుకకు",
+                "finish_tour": "🎉 టూర్ పూర్తయింది",
                 "col1_title": "1️⃣ వ్యాధిని ఎంచుకుని వివరాలను నమోదు చేయండి",
                 "disease_label": "క్లినికల్ రోగనిర్ధారణ",
                 "col2_title": "2️⃣ ప్రస్తుత సూచించిన మందు",
@@ -296,18 +316,16 @@ else:
             "Hindi": {
                 "portal_title": "सार्वभौमिक बहु-रोग और दवा सहायक",
                 "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और व्यक्तिगत खुराक समायोजन की जाँच करें।",
-                "guide_title": "📖 उपयोग कैसे करें (त्वरित उपयोगकर्ता गाइड)",
-                "step1_title": "चरण 1: अपनी बीमारी चुनें",
-                "step1_desc": "ड्रॉपडाउन सूची से अपनी बीमारी का चयन करें (जैसे: मधुमेह/शुगर, उच्च रक्तचाप, थायराइड)।",
-                "step2_title": "चरण 2: परीक्षण रिपोर्ट का विवरण दर्ज करें",
-                "step2_desc": "अपनी नवीनतम लैब रिपोर्ट से रक्त शर्करा (FBS/PPBS), HbA1c या बीपी का सटीक मान भरें।",
-                "step3_title": "चरण 3: अपनी वर्तमान दवा और खुराक चुनें",
-                "step3_desc": "जो दवा आप ले रहे हैं उसे चुनें और डॉक्टर द्वारा बताई गई खुराक (mg/mcg) दर्ज करें।",
-                "step4_title": "चरण 4: सुरक्षा जांच और मूल्यांकन",
-                "step4_desc": "किडनी eGFR दर्ज करें और 'मूल्यांकन करें' पर क्लिक करें। सिस्टम जांचेगा कि खुराक सुरक्षित है या नहीं।",
-                "step5_title": "चरण 5: सरल भाषा में स्पष्टीकरण",
-                "step5_desc": "'सरल हिंदी में स्पष्टीकरण' बटन दबाएं या AI सहायक से अपनी भाषा में कोई भी सवाल पूछें।",
-                "privacy_note": "🔒 आपका दर्ज किया गया डेटा पूरी तरह से सुरक्षित और गोपनीय है।",
+                "start_tour_btn": "🎯 इंटरएक्टिव गाइडेड टूर शुरू करें",
+                "stop_tour_btn": "✖ टूर बंद करें",
+                "step1_tip": "👇 चरण 1: यहाँ अपनी बीमारी का चयन करें।",
+                "step2_tip": "👇 चरण 2: अपनी नवीनतम लैब रिपोर्ट का मान यहाँ भरें।",
+                "step3_tip": "👉 चरण 3: अपनी दवा और वर्तमान खुराक यहाँ चुनें।",
+                "step4_tip": "👇 चरण 4: किडनी eGFR दर्ज करें और खुराक जांचने के लिए यहाँ क्लिक करें!",
+                "step5_tip": "👇 चरण 5: परिणाम देखें और सरल भाषा में समझने के लिए यहाँ क्लिक करें!",
+                "next_btn": "अगला कदम ➡️",
+                "prev_btn": "⬅️ पीछे",
+                "finish_tour": "🎉 टूर पूरा हुआ",
                 "col1_title": "1️⃣ रोग चुनें और स्वास्थ्य विवरण दर्ज करें",
                 "disease_label": "चिकित्सीय निदान (Diagnosis)",
                 "col2_title": "2️⃣ वर्तमान निर्धारित दवा",
@@ -329,18 +347,16 @@ else:
             "Spanish": {
                 "portal_title": "Asistente Universal de Enfermedades y Medicamentos",
                 "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis personalizados con sus últimos análisis.",
-                "guide_title": "📖 Guía de Inicio Rápido (Manual de Usuario)",
-                "step1_title": "Paso 1: Seleccione su Condición",
-                "step1_desc": "Elija su enfermedad en el menú desplegable (por ejemplo, Diabetes, Hipertensión, Tiroides).",
-                "step2_title": "Paso 2: Ingrese sus Resultados de Laboratorio",
-                "step2_desc": "Escriba sus valores de análisis más recientes (glucosa, HbA1c, presión arterial, etc.).",
-                "step3_title": "Paso 3: Confirme su Medicamento y Dosis",
-                "step3_desc": "Seleccione el fármaco prescrito e introduzca los miligramos (mg) diarios que toma actualmente.",
-                "step4_title": "Paso 4: Evaluación y Seguridad Renal",
-                "step4_desc": "Ingrese el filtrado glomerular (eGFR) y haga clic en 'Evaluar' para verificar la seguridad.",
-                "step5_title": "Paso 5: Explicación con Inteligencia Artificial",
-                "step5_desc": "Presione 'Explicar en Español' o consulte al Asistente Clínico AI ante cualquier inquietud.",
-                "privacy_note": "🔒 Toda la información ingresada se procesa localmente y es estrictamente confidencial.",
+                "start_tour_btn": "🎯 Iniciar Tour Guiado Paso a Paso",
+                "stop_tour_btn": "✖ Salir del Tour",
+                "step1_tip": "👇 PASO 1: Seleccione su enfermedad en este menú desplegable.",
+                "step2_tip": "👇 PASO 2: Ingrese aquí los valores de sus análisis de laboratorio.",
+                "step3_tip": "👉 PASO 3: Seleccione su medicamento prescrito y dosis actual.",
+                "step4_tip": "👇 PASO 4: Ingrese su eGFR y presione este botón para evaluar!",
+                "step5_tip": "👇 PASO 5: Revise los resultados y presione aquí para una explicación sencilla!",
+                "next_btn": "Siguiente ➡️",
+                "prev_btn": "⬅️ Anterior",
+                "finish_tour": "🎉 Finalizar Tour",
                 "col1_title": "1️⃣ Seleccione Enfermedad e Ingrese Parámetros",
                 "disease_label": "Diagnóstico Clínico",
                 "col2_title": "2️⃣ Medicamento Prescrito Actual",
@@ -371,28 +387,50 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # Onboarding Tutorial / User Guide Expander
-        with st.expander(f"{t['guide_title']}", expanded=True):
-            m_col1, m_col2, m_col3 = st.columns(3)
-            with m_col1:
-                st.markdown(f"**{t['step1_title']}**")
-                st.caption(t['step1_desc'])
-                st.markdown(f"**{t['step2_title']}**")
-                st.caption(t['step2_desc'])
-            with m_col2:
-                st.markdown(f"**{t['step3_title']}**")
-                st.caption(t['step3_desc'])
-                st.markdown(f"**{t['step4_title']}**")
-                st.caption(t['step4_desc'])
-            with m_col3:
-                st.markdown(f"**{t['step5_title']}**")
-                st.caption(t['step5_desc'])
-                st.markdown("---")
-                st.caption(t['privacy_note'])
+        # Tour Toggle Button Bar
+        tb_col1, tb_col2 = st.columns([2, 1])
+        with tb_col1:
+            if not st.session_state.tutorial_active:
+                if st.button(t["start_tour_btn"], type="primary"):
+                    st.session_state.tutorial_active = True
+                    st.session_state.tutorial_step = 1
+                    st.rerun()
+            else:
+                if st.button(t["stop_tour_btn"]):
+                    st.session_state.tutorial_active = False
+                    st.session_state.tutorial_step = 1
+                    st.rerun()
+
+        # Step Controller Bar (Shown only during active tour)
+        if st.session_state.tutorial_active:
+            ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([1, 1, 2])
+            with ctrl_c1:
+                if st.button(t["prev_btn"], disabled=(st.session_state.tutorial_step == 1)):
+                    st.session_state.tutorial_step -= 1
+                    st.rerun()
+            with ctrl_c2:
+                if st.session_state.tutorial_step < 5:
+                    if st.button(t["next_btn"], type="primary"):
+                        st.session_state.tutorial_step += 1
+                        st.rerun()
+                else:
+                    if st.button(t["finish_tour"], type="primary"):
+                        st.session_state.tutorial_active = False
+                        st.session_state.tutorial_step = 1
+                        st.rerun()
+            with ctrl_c3:
+                st.info(f"📍 Step {st.session_state.tutorial_step} of 5 Active")
+
+        st.write("---")
 
         col1, col2 = st.columns(2)
         with col1:
             st.subheader(t["col1_title"])
+
+            # STEP 1 POINTER
+            if st.session_state.tutorial_active and st.session_state.tutorial_step == 1:
+                st.markdown(f'<div class="tutorial-pointer">{t["step1_tip"]}</div>', unsafe_allow_html=True)
+
             condition = st.selectbox(
                 t["disease_label"],
                 [
@@ -403,6 +441,10 @@ else:
                 ],
                 key="pat_disease_sel"
             )
+
+            # STEP 2 POINTER
+            if st.session_state.tutorial_active and st.session_state.tutorial_step == 2:
+                st.markdown(f'<div class="tutorial-pointer">{t["step2_tip"]}</div>', unsafe_allow_html=True)
 
             vitals_payload = {}
             if condition == "Diabetes":
@@ -453,6 +495,11 @@ else:
 
         with col2:
             st.subheader(t["col2_title"])
+
+            # STEP 3 POINTER
+            if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
+                st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
+
             selected_med = st.selectbox(t["med_label"], med_options, key="pat_med_choice")
             
             default_map = {
@@ -472,11 +519,15 @@ else:
             patient_egfr_val = st.number_input(t["egfr_label"], 0, 150, 90)
 
         st.write("---")
+
+        # STEP 4 POINTER
+        if st.session_state.tutorial_active and st.session_state.tutorial_step == 4:
+            st.markdown(f'<div class="tutorial-pointer">{t["step4_tip"]}</div>', unsafe_allow_html=True)
+
         if st.button(t["eval_btn"], type="primary"):
             res = evaluate_disease_management(
                 condition, selected_med, current_dose_input, vitals_payload, egfr=patient_egfr_val
             )
-
             st.session_state.last_patient_res = res
             st.session_state.last_patient_condition = condition
             st.session_state.last_patient_med = selected_med
@@ -502,6 +553,10 @@ else:
                     st.write(r)
 
             st.info(t["safety_note"])
+
+            # STEP 5 POINTER
+            if st.session_state.tutorial_active and st.session_state.tutorial_step == 5:
+                st.markdown(f'<div class="tutorial-pointer">{t["step5_tip"]}</div>', unsafe_allow_html=True)
 
             # Multilingual Plain-Language Medical Explanation via Gemini
             if st.button(t["explain_btn"]):
