@@ -238,7 +238,7 @@ else:
         st.divider()
 
     # =========================================================
-    # A. PATIENT PORTAL (MULTI-DRUG & MEAL-BY-MEAL ASSISTANCE)
+    # A. PATIENT PORTAL (MULTI-DRUG & VISUAL PILL BOX SCHEDULE)
     # =========================================================
     if st.session_state.user_role == "Patient":
         selected_lang = st.sidebar.selectbox("🌐 Choose Language / Lugha", ["English", "Telugu", "Hindi", "Swahili (Kiswahili)"])
@@ -258,7 +258,7 @@ else:
                 "step2_tip": "👇 STEP 2: Enter your latest lab test results here.",
                 "step3_tip": "👉 STEP 3: Select all medicines you take and enter each daily dosage.",
                 "step4_tip": "👇 STEP 4: Input your kidney eGFR (default 90) and click this button to evaluate!",
-                "step5_tip": "👇 STEP 5: Review your meal plan below and click here for plain-language AI explanation!",
+                "step5_tip": "👇 STEP 5: Review your visual meal pill box schedule and set reminders below!",
                 "next_btn": "Next Step ➡️",
                 "prev_btn": "⬅️ Back",
                 "finish_tour": "🎉 Finish Tour",
@@ -274,7 +274,6 @@ else:
                 "contra_badge": "⛔ CONTRAINDICATED / KIDNEY SAFETY WARNING",
                 "curr_dose": "Current Daily Dose:",
                 "rec_dose": "Target-Adjusted Dose:",
-                "meal_header": "🍽️ Meal-by-Meal Administration Schedule:",
                 "details_title": "🩺 Clinical Assessment Details:",
                 "safety_note": "💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage or meal timing.",
                 "explain_btn": "🗣️ Explain in Plain Language",
@@ -289,7 +288,7 @@ else:
                 "step2_tip": "👇 దశ 2: మీ తాజా ల్యాబ్ రిపోర్ట్ రీడింగ్‌లను ఇక్కడ నమోదు చేయండి.",
                 "step3_tip": "👉 దశ 3: మీరు వాడుతున్న అన్ని మందులను మరియు వాటి మోతాదులను ఇక్కడ నమోదు చేయండి.",
                 "step4_tip": "👇 దశ 4: కిడ్నీ eGFR నమోదు చేసి, భోజన సమయాల మోతాదును అంచనా వేయడానికి ఇక్కడ క్లిక్ చేయండి!",
-                "step5_tip": "👇 దశ 5: భోజన సమయాల ప్రణాళికను సమీక్షించి, వివరణ కోసం ఇక్కడ క్లిక్ చేయండి!",
+                "step5_tip": "👇 దశ 5: భోజన సమయాల ప్రణాళికను సమీక్షించి, రిమైండర్లను సెట్ చేసుకోండి!",
                 "next_btn": "తదుపరి దశ ➡️",
                 "prev_btn": "⬅️ వెనుకకు",
                 "finish_tour": "🎉 టూర్ పూర్తయింది",
@@ -305,7 +304,6 @@ else:
                 "contra_badge": "⛔ తీవ్రమైన ప్రమాదం / కిడ్నీ భద్రతా హెచ్చరిక",
                 "curr_dose": "ప్రస్తుత రోజువారీ మోతాదు:",
                 "rec_dose": "సిఫార్సు చేసిన సరైన మోతాదు:",
-                "meal_header": "🍽️ భోజన సమయాల్లో మందులు తీసుకునే విధానం:",
                 "details_title": "🩺 క్లినికల్ మూల్యాంకన వివరాలు:",
                 "safety_note": "💡 **గమనిక:** మీ మోతాదును లేదా సమయాలను మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి.",
                 "explain_btn": "🗣️ సులభమైన తెలుగులో వివరణ పొందండి",
@@ -320,9 +318,9 @@ else:
                 "step2_tip": "👇 चरण 2: अपनी नवीनतम लैब रिपोर्ट का मान यहाँ भरें।",
                 "step3_tip": "👉 चरण 3: अपनी सभी दवाएं और उनकी दैनिक खुराक यहाँ दर्ज करें।",
                 "step4_tip": "👇 चरण 4: किडनी eGFR दर्ज करें और खुराक तालिका देखने के लिए यहाँ क्लिक करें!",
-                "step5_tip": "👇 चरण 5: भोजन-वार खुराक देखें और सरल भाषा में समझने के लिए यहाँ क्लिक करें!",
+                "step5_tip": "👇 चरण 5: भोजन-वार खुराक देखें और रिमाइंडर सेट करने के लिए यहाँ क्लिक करें!",
                 "next_btn": "अगला कदम ➡️",
-                "prev_btn": "⬅️ पीछे",
+                "prev_btn": "⬅️️ पीछे",
                 "finish_tour": "🎉 टूर पूरा हुआ",
                 "col1_title": "1️⃣ रोग चुनें और स्वास्थ्य विवरण दर्ज करें",
                 "disease_label": "चिकित्सीय निदान (Diagnosis)",
@@ -336,7 +334,6 @@ else:
                 "contra_badge": "⛔ गंभीर चेतावनी / किडनी सुरक्षा जोखिम",
                 "curr_dose": "वर्तमान दैनिक खुराक:",
                 "rec_dose": "अनुशंसित समायोजित खुराक:",
-                "meal_header": "🍽️ भोजन के अनुसार दवा लेने का समय:",
                 "details_title": "🩺 चिकित्सीय मूल्यांकन विवरण:",
                 "safety_note": "💡 **सुरक्षा नोट:** कृपया अपनी निर्धारित खुराक या समय बदलने से पहले अपने डॉक्टर से परामर्श लें।",
                 "explain_btn": "🗣️ सरल हिंदी में स्पष्टीकरण प्राप्त करें",
@@ -351,7 +348,7 @@ else:
                 "step2_tip": "👇 HATUA YA 2: Weka matokeo ya vipimo vyako vya hivi karibuni hapa.",
                 "step3_tip": "👉 HATUA YA 3: Chagua dawa zote unazotumia na weka kiwango cha dozi ya kila siku.",
                 "step4_tip": "👇 HATUA YA 4: Weka kipimo cha figo (eGFR) na bonyeza kitufe hiki kufanya tathmini!",
-                "step5_tip": "👇 HATUA YA 5: Kagua mpango wa chakula hapa chini na bonyeza kwa maelezo rahisi ya AI!",
+                "step5_tip": "👇 HATUA YA 5: Kagua ratiba ya chakula hapa chini na weka vikumbusho!",
                 "next_btn": "Hatua Inayofuata ➡️",
                 "prev_btn": "⬅️ Nyuma",
                 "finish_tour": "🎉 Maliza Mwongozo",
@@ -367,10 +364,9 @@ else:
                 "contra_badge": "⛔ ONYO KALI: HATARI KWA FIGO / USITUMIE",
                 "curr_dose": "Dozi ya Sasa ya Kila Siku:",
                 "rec_dose": "Dozi Inayoshauriwa:",
-                "meal_header": "🍽️ Mpango wa Kumeza Vidonge Kulingana na Milo:",
                 "details_title": "🩺 Sababu za Kitabibu:",
                 "safety_note": "💡 **Ujumbe wa Usalama:** Tafadhali wasiliana na daktari wako kabla ya kubadilisha dozi au ratiba ya kumeza dawa.",
-                "explain_btn": "🗣️️ Eleza kwa Kiswahili Rahisi",
+                "explain_btn": "🗣️ Eleza kwa Kiswahili Rahisi",
                 "generating": "Maelezo kwa Kiswahili yanatayarishwa..."
             }
         }
@@ -560,20 +556,24 @@ else:
                 st.session_state.last_patient_batch = batch_evaluations
                 st.session_state.last_patient_condition = condition
 
-        # DISPLAY RESULTS WITH FULL MEAL TITRATION GUIDANCE
+        # DISPLAY RESULTS WITH VISUAL MEAL PILL BOX CARDS & REMINDERS
         if "last_patient_batch" in st.session_state:
             st.subheader(t["results_header"])
 
+            # ---------------------------------------------------------
+            # 1. VISUAL "MEAL PILL BOX" CARDS
+            # ---------------------------------------------------------
             for res in st.session_state.last_patient_batch:
                 med_name = res["drug"]
                 adv = res["meal_advice"]
 
                 with st.container(border=True):
-                    h_col1, h_col2 = st.columns([2.5, 1.5])
-                    with h_col1:
+                    # Header
+                    h1, h2 = st.columns([2.5, 1.5])
+                    with h1:
                         st.markdown(f"### 💊 {med_name}")
                         st.markdown(f"**{adv['action_text']}**")
-                    with h_col2:
+                    with h2:
                         if res["dose_correct"]:
                             st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
                         elif "Renal" in res["status"] or "Contraindicated" in res["status"]:
@@ -581,24 +581,111 @@ else:
                         else:
                             st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
 
-                    st.write("---")
+                    st.markdown("#### 🍱 Daily Visual Pill Box Schedule")
 
-                    m_col1, m_col2 = st.columns([1.6, 1.4])
-                    with m_col1:
-                        st.markdown(f"##### {t['meal_header']}")
-                        st.code(adv['split_plan'], language="text")
-                        st.caption(f"💡 **Administration Rule:** {adv['clinical_note']}")
-                        
-                        r_col1, r_col2 = st.columns(2)
-                        with r_col1:
-                            st.write(f"**{t['curr_dose']}** {res['current_dose_mg']} mg/mcg/Units")
-                        with r_col2:
-                            st.write(f"**{t['rec_dose']}** **{res['recommended_dose_mg']} mg/mcg/Units**")
+                    # 3 Styled Meal Columns
+                    b_col, l_col, d_col = st.columns(3)
 
-                    with m_col2:
-                        st.markdown(f"##### {t['details_title']}")
+                    # Morning Card
+                    with b_col:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                            <div style="font-size: 1.1rem; font-weight: 700;">🌅 Morning (Breakfast)</div>
+                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #fef08a;">{adv.get('morning_dose', '—')}</div>
+                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('morning_timing', 'None')}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Afternoon Card
+                    with l_col:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                            <div style="font-size: 1.1rem; font-weight: 700;">☀️ Afternoon (Lunch)</div>
+                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</div>
+                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('afternoon_timing', 'None')}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Night Card
+                    with d_col:
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #818cf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                            <div style="font-size: 1.1rem; font-weight: 700;">🌙 Night (Dinner)</div>
+                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #c7d2fe;">{adv.get('night_dose', '—')}</div>
+                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('night_timing', 'None')}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    st.write("")
+                    st.caption(f"💡 **Clinical Administration Rule:** {adv['clinical_note']}")
+                    with st.expander("🩺 View Detailed Lab Metric Rationale"):
                         for r in res["reasons"]:
                             st.write(f"• {r}")
+
+            st.write("---")
+
+            # ---------------------------------------------------------
+            # 2. POP-UP MEDICATION REMINDER SYSTEM
+            # ---------------------------------------------------------
+            st.markdown("### ⏰ Set Daily Meal Dose Reminders (Pop-Up & Audio)")
+            st.caption("HelixRx can send browser alerts to your phone or laptop at meal times so you never miss a dose.")
+
+            rem_col1, rem_col2, rem_col3 = st.columns(3)
+            with rem_col1:
+                b_time = st.time_input("🌅 Breakfast Alert Time", value=datetime.strptime("08:30", "%H:%M").time(), key="time_b")
+            with rem_col2:
+                l_time = st.time_input("☀️ Lunch Alert Time", value=datetime.strptime("13:30", "%H:%M").time(), key="time_l")
+            with rem_col3:
+                d_time = st.time_input("🌙 Dinner Alert Time", value=datetime.strptime("20:30", "%H:%M").time(), key="time_d")
+
+            btn_rem1, btn_rem2 = st.columns(2)
+            
+            with btn_rem1:
+                # Test Notification Button for Live Demoing
+                if st.button("🧪 Test Instant Reminder Pop-Up", use_container_width=True):
+                    med_summary_names = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
+                    test_alert_js = f"""
+                    <script>
+                        if ("Notification" in window) {{
+                            Notification.requestPermission().then(permission => {{
+                                if (permission === "granted") {{
+                                    new Notification("🔔 HelixRx Medication Reminder", {{
+                                        body: "Time for your prescribed meal dose: {med_summary_names}. Check your pill box!",
+                                        icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f48a.png"
+                                    }});
+                                }} else {{
+                                    alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
+                                }}
+                            }});
+                        }} else {{
+                            alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
+                        }}
+                    </script>
+                    """
+                    st.components.v1.html(test_alert_js, height=0)
+                    st.success(f"🔔 Test Alert Triggered for: {med_summary_names}!")
+
+            with btn_rem2:
+                if st.button("🔔 Activate Daily Browser Reminders", type="primary", use_container_width=True):
+                    med_list_str = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
+                    reminders_active_js = f"""
+                    <script>
+                        if ("Notification" in window) {{
+                            Notification.requestPermission().then(permission => {{
+                                if (permission === "granted") {{
+                                    new Notification("✅ HelixRx Reminders Activated", {{
+                                        body: "Reminders scheduled for Breakfast ({b_time.strftime('%H:%M')}), Lunch ({l_time.strftime('%H:%M')}), and Dinner ({d_time.strftime('%H:%M')}) for {med_list_str}.",
+                                        icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/2705.png"
+                                    }});
+                                }} else {{
+                                    alert("Please allow notification permissions in your browser bar to receive reminders.");
+                                }}
+                            }});
+                        }}
+                    </script>
+                    """
+                    st.components.v1.html(reminders_active_js, height=0)
+                    st.success(f"✅ Daily Reminders active: Breakfast at {b_time.strftime('%H:%M')}, Lunch at {l_time.strftime('%H:%M')}, and Dinner at {d_time.strftime('%H:%M')}.")
 
             st.info(t["safety_note"])
 

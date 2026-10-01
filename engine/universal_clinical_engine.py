@@ -2,18 +2,28 @@
 HelixRx Universal Clinical Engine
 Comprehensive clinical decision support across 11 chronic conditions.
 Handles dynamic auto-titration, renal/hepatic safety thresholds,
-and meal-by-meal administration schedule generation.
+and meal-by-meal administration schedule generation (Morning, Afternoon, Night).
 """
 
 def generate_meal_titration_instruction(drug_name, current_dose, recommended_dose):
     """
-    Translates raw dose titration numbers into practical, meal-by-meal instructions
-    (Breakfast, Lunch, Dinner) along with explicit administration guidance.
+    Translates raw dose titration numbers into structured meal data
+    for Breakfast (Morning), Lunch (Afternoon), and Dinner (Night) visual cards.
     """
     d_name = str(drug_name).lower()
     current_dose = float(current_dose)
     recommended_dose = float(recommended_dose)
     
+    # Defaults
+    morning_dose = "—"
+    morning_timing = "None"
+    afternoon_dose = "—"
+    afternoon_timing = "None"
+    night_dose = "—"
+    night_timing = "None"
+    clinical_note = "Take strictly as prescribed by your treating physician."
+    action_text = f"Target Dose: {recommended_dose:.0f} mg/day"
+
     # 1. Metformin
     if "metformin" in d_name:
         if recommended_dose > current_dose:
@@ -24,23 +34,35 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
             action_text = f"✅ Maintain Current Dose: Keep taking {recommended_dose:.0f} mg/day."
 
         if recommended_dose <= 0:
-            split_plan = "• Morning (Breakfast): Discontinue\n• Afternoon (Lunch): Discontinue\n• Night (Dinner): Discontinue"
             clinical_note = "Medication held due to organ safety or clinical contraindication."
         elif recommended_dose <= 500:
-            split_plan = "• Morning (Breakfast): None\n• Afternoon (Lunch): None\n• Night (Dinner): 500 mg (with meal)"
-            clinical_note = "Always take with or immediately after meals to reduce gastrointestinal side effects."
+            night_dose = "500 mg"
+            night_timing = "With dinner meal"
+            clinical_note = "Take with dinner to reduce stomach discomfort."
         elif recommended_dose <= 1000:
-            split_plan = "• Morning (Breakfast): 500 mg (with meal)\n• Afternoon (Lunch): None\n• Night (Dinner): 500 mg (with meal)"
-            clinical_note = "Split evenly across breakfast and dinner to maintain steady glycemic control."
+            morning_dose = "500 mg"
+            morning_timing = "With breakfast"
+            night_dose = "500 mg"
+            night_timing = "With dinner"
+            clinical_note = "Split evenly across breakfast and dinner."
         elif recommended_dose <= 1500:
-            split_plan = "• Morning (Breakfast): 500 mg (with meal)\n• Afternoon (Lunch): 500 mg (with meal)\n• Night (Dinner): 500 mg (with meal)"
-            clinical_note = "Take 500 mg with each of your three main meals."
+            morning_dose = "500 mg"
+            morning_timing = "With breakfast"
+            afternoon_dose = "500 mg"
+            afternoon_timing = "With lunch"
+            night_dose = "500 mg"
+            night_timing = "With dinner"
+            clinical_note = "Take 500 mg with each of your 3 main meals."
         else:  # 2000 mg max
-            split_plan = "• Morning (Breakfast): 1000 mg (with meal)\n• Afternoon (Lunch): None\n• Night (Dinner): 1000 mg (with meal)"
-            clinical_note = "Take 1000 mg with breakfast and 1000 mg with dinner. Maximum daily dose reached."
+            morning_dose = "1000 mg"
+            morning_timing = "With breakfast"
+            night_dose = "1000 mg"
+            night_timing = "With dinner"
+            clinical_note = "Maximum daily ceiling (2000 mg) reached. Always take with food."
 
     # 2. Glimepiride / Gliclazide (Sulfonylureas)
     elif "glimepiride" in d_name or "gliclazide" in d_name:
+        unit = "mg"
         if recommended_dose > current_dose:
             action_text = f"🔺 Titration Recommended: Increase from {current_dose:.1f} mg to {recommended_dose:.1f} mg/day."
         elif recommended_dose < current_dose:
@@ -49,15 +71,18 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
             action_text = f"✅ Maintain Current Dose: Continue {recommended_dose:.1f} mg/day."
 
         if recommended_dose <= 0:
-            split_plan = "• Morning (Breakfast): Discontinue\n• Afternoon (Lunch): Discontinue\n• Night (Dinner): Discontinue"
             clinical_note = "Discontinued due to hypoglycemia risk or contraindication."
         elif recommended_dose <= 2:
-            split_plan = f"• Morning (Breakfast): None\n• Afternoon (Lunch): {recommended_dose:.1f} mg (15-30 mins before food)\n• Night (Dinner): None"
-            clinical_note = "Take before your main meal. Never skip a meal after taking a sulfonylurea."
+            afternoon_dose = f"{recommended_dose:.1f} {unit}"
+            afternoon_timing = "15-30 mins BEFORE lunch"
+            clinical_note = "Take strictly before your main meal. Never skip lunch after taking this tablet."
         else:
             half = recommended_dose / 2.0
-            split_plan = f"• Morning (Breakfast): {half:.1f} mg (before breakfast)\n• Afternoon (Lunch): {half:.1f} mg (before lunch)\n• Night (Dinner): None"
-            clinical_note = "Split before breakfast and lunch. Avoid taking at night to prevent nocturnal hypoglycemia."
+            morning_dose = f"{half:.1f} {unit}"
+            morning_timing = "15-30 mins BEFORE breakfast"
+            afternoon_dose = f"{half:.1f} {unit}"
+            afternoon_timing = "15-30 mins BEFORE lunch"
+            clinical_note = "Split across morning and afternoon meals. Avoid taking at bedtime to prevent nocturnal hypoglycemia."
 
     # 3. Insulin
     elif "insulin" in d_name:
@@ -68,10 +93,11 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Maintain: Continue {recommended_dose:.0f} Units/day."
 
-        morning_units = round(recommended_dose * 0.6)
-        night_units = round(recommended_dose * 0.4)
-        split_plan = f"• Morning (Breakfast): {morning_units} Units (subcutaneous before meal)\n• Afternoon (Lunch): None\n• Night (Dinner): {night_units} Units (subcutaneous before dinner)"
-        clinical_note = "Rotate injection sites daily. Keep fast-acting carbohydrates nearby in case of hypoglycemia."
+        morning_dose = f"{round(recommended_dose * 0.6)} Units"
+        morning_timing = "Subcutaneous injection before breakfast"
+        night_dose = f"{round(recommended_dose * 0.4)} Units"
+        night_timing = "Subcutaneous injection before dinner"
+        clinical_note = "Rotate injection sites daily. Keep fast-acting carbohydrates nearby."
 
     # 4. Antihypertensives (Amlodipine, Telmisartan, Lisinopril)
     elif "amlodipine" in d_name or "telmisartan" in d_name or "lisinopril" in d_name:
@@ -80,8 +106,9 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Optimal: Maintain {recommended_dose:.0f} mg/day."
             
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg once daily\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take in the morning with a full glass of water. Maintain consistent hydration."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Every morning with a glass of water"
+        clinical_note = "Take consistently at roughly the same time each morning."
 
     # 5. Thyroid (Levothyroxine, Methimazole)
     elif "levothyroxine" in d_name:
@@ -90,8 +117,9 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Optimal: Maintain {recommended_dose:.0f} mcg/day."
 
-        split_plan = f"• Morning (Waking Up): {recommended_dose:.0f} mcg on an empty stomach\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take strictly 30-60 minutes before breakfast with plain water. Avoid calcium or iron supplements within 4 hours."
+        morning_dose = f"{recommended_dose:.0f} mcg"
+        morning_timing = "First thing in morning on empty stomach"
+        clinical_note = "Take 30-60 minutes before breakfast with plain water. Avoid calcium or iron supplements within 4 hours."
 
     elif "methimazole" in d_name:
         if recommended_dose != current_dose:
@@ -99,8 +127,9 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Maintain: Continue {recommended_dose:.0f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with food\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take with meals to prevent gastrointestinal upset."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With breakfast"
+        clinical_note = "Take with food to minimize stomach upset."
 
     # 6. Lipid Lowering (Statins & Fibrates)
     elif "atorvastatin" in d_name or "rosuvastatin" in d_name:
@@ -109,33 +138,40 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Optimal: Maintain {recommended_dose:.0f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): None\n• Afternoon (Lunch): None\n• Night (Bedtime): {recommended_dose:.0f} mg once daily"
-        clinical_note = "Take at bedtime. The liver produces the vast majority of cholesterol while sleeping."
+        night_dose = f"{recommended_dose:.0f} mg"
+        night_timing = "Bedtime / After dinner"
+        clinical_note = "Take at bedtime because the liver produces most cholesterol overnight."
 
     elif "fenofibrate" in d_name:
         action_text = f"🔄 Dose: {recommended_dose:.0f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with meal\n• Afternoon (Lunch): None\n• Night (Dinner): None"
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With morning meal"
         clinical_note = "Take with your morning meal for optimal absorption."
 
     # 7. Anticoagulants (Warfarin, Apixaban, Rivaroxaban)
     elif "warfarin" in d_name:
         if recommended_dose != current_dose:
-            action_text = f"⚠️ Warfarin Titration: Adjust dose from {current_dose:.1f} mg to {recommended_dose:.1f} mg/day based on INR."
+            action_text = f"⚠️ Warfarin Titration: Adjust from {current_dose:.1f} mg to {recommended_dose:.1f} mg/day based on INR."
         else:
             action_text = f"✅ INR Therapeutic: Maintain {recommended_dose:.1f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): None\n• Afternoon (Lunch): None\n• Night (Dinner/Bedtime): {recommended_dose:.1f} mg once daily"
-        clinical_note = "Take at the exact same time every evening. Maintain consistent dietary Vitamin K intake."
+        night_dose = f"{recommended_dose:.1f} mg"
+        night_timing = "Every evening at same time"
+        clinical_note = "Maintain consistent dietary Vitamin K intake."
 
     elif "apixaban" in d_name:
-        action_text = f"✅ DOAC Schedule: {recommended_dose:.1f} mg twice daily."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.1f} mg\n• Afternoon (Lunch): None\n• Night (Dinner): {recommended_dose:.1f} mg"
-        clinical_note = "Take roughly 12 hours apart, with or without food."
+        action_text = f"✅ DOAC Regimen: {recommended_dose:.1f} mg twice daily."
+        morning_dose = f"{recommended_dose:.1f} mg"
+        morning_timing = "Morning with or without food"
+        night_dose = f"{recommended_dose:.1f} mg"
+        night_timing = "Night (~12 hours after morning dose)"
+        clinical_note = "Take roughly 12 hours apart."
 
     elif "rivaroxaban" in d_name:
-        action_text = f"✅ DOAC Schedule: {recommended_dose:.0f} mg once daily."
-        split_plan = f"• Morning (Breakfast): None\n• Afternoon (Lunch): None\n• Night (Dinner): {recommended_dose:.0f} mg (must be taken with food)"
-        clinical_note = "Take with your evening meal. Food is required for adequate absorption."
+        action_text = f"✅ DOAC Regimen: {recommended_dose:.0f} mg once daily."
+        night_dose = f"{recommended_dose:.0f} mg"
+        night_timing = "With dinner / evening meal"
+        clinical_note = "Must be taken with an evening meal for adequate absorption."
 
     # 8. Heart Failure & Diuretics (Furosemide, Spironolactone)
     elif "furosemide" in d_name:
@@ -144,13 +180,15 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Maintain: Continue {recommended_dose:.0f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg\n• Afternoon (Lunch): None\n• Night (Dinner): Avoid"
-        clinical_note = "Take early in the day to prevent nighttime urination from disrupting sleep."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Morning with water"
+        clinical_note = "Take early in the morning to prevent frequent nighttime urination."
 
     elif "spironolactone" in d_name:
         action_text = f"🔄 Aldosterone Antagonist: {recommended_dose:.0f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with food\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take with morning food. Regularly monitor serum potassium levels."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With breakfast"
+        clinical_note = "Take with food and monitor serum potassium."
 
     # 9. Gout & Hyperuricemia (Allopurinol, Febuxostat, Colchicine)
     elif "allopurinol" in d_name:
@@ -159,29 +197,40 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Target Reached: Maintain {recommended_dose:.0f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg after meal\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take immediately after meals with plenty of fluid (2-3 liters of water daily)."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Immediately after breakfast"
+        clinical_note = "Drink plenty of water (at least 2-3 liters throughout the day)."
 
     elif "febuxostat" in d_name:
         action_text = f"🔄 Dose: {recommended_dose:.0f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg\n• Afternoon (Lunch): None\n• Night (Dinner): None"
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Morning with or without food"
         clinical_note = "Can be taken with or without food."
 
     elif "colchicine" in d_name:
         action_text = f"🔄 Dose: {recommended_dose:.1f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.1f} mg\n• Afternoon (Lunch): None\n• Night (Dinner): None"
-        clinical_note = "Take as prescribed. If severe diarrhea or vomiting occurs, contact your doctor."
+        morning_dose = f"{recommended_dose:.1f} mg"
+        morning_timing = "Morning with food"
+        clinical_note = "Discontinue if severe diarrhea or abdominal pain develops."
 
     # 10. Respiratory (Salbutamol, Budesonide)
     elif "salbutamol" in d_name or "albuterol" in d_name:
         action_text = f"💨 Bronchodilator: {recommended_dose:.0f} mcg as needed."
-        split_plan = "• Morning: 1-2 puffs if symptoms occur\n• Afternoon: 1-2 puffs if symptoms occur\n• Night: 1-2 puffs if symptoms occur"
-        clinical_note = "Rescue inhaler. Use prior to strenuous activity or during acute shortness of breath."
+        morning_dose = "1-2 puffs"
+        morning_timing = "If symptoms occur"
+        afternoon_dose = "1-2 puffs"
+        afternoon_timing = "If symptoms occur"
+        night_dose = "1-2 puffs"
+        night_timing = "If symptoms occur"
+        clinical_note = "Rescue inhaler for acute shortness of breath."
 
     elif "budenoside" in d_name or "budesonide" in d_name:
         action_text = f"💨 Inhaled Corticosteroid: {recommended_dose:.0f} mcg twice daily."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mcg inhaler\n• Afternoon: None\n• Night (Bedtime): {recommended_dose:.0f} mcg inhaler"
-        clinical_note = "Always rinse mouth thoroughly with water and spit it out after inhalation to prevent oral thrush."
+        morning_dose = f"{recommended_dose:.0f} mcg"
+        morning_timing = "Inhaler after waking"
+        night_dose = f"{recommended_dose:.0f} mcg"
+        night_timing = "Inhaler before bedtime"
+        clinical_note = "Always rinse mouth with water and spit it out after inhalation."
 
     # 11. Depression & Anxiety (Sertraline, Escitalopram, Venlafaxine)
     elif "sertraline" in d_name or "escitalopram" in d_name:
@@ -190,34 +239,47 @@ def generate_meal_titration_instruction(drug_name, current_dose, recommended_dos
         else:
             action_text = f"✅ Optimal: Maintain {recommended_dose:.0f} mg/day."
 
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with food\n• Afternoon: None\n• Night: None"
-        clinical_note = "Take in the morning with food to minimize nausea. Do not discontinue abruptly."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With breakfast"
+        clinical_note = "Take in the morning with food. Do not stop abruptly."
 
     elif "venlafaxine" in d_name:
         action_text = f"🔄 SNRI Titration: Adjust to {recommended_dose:.0f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with food\n• Afternoon: None\n• Night: None"
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With breakfast"
         clinical_note = "Take with food at approximately the same time each morning."
 
     # 12. Rheumatoid Arthritis (Methotrexate, Hydroxychloroquine)
     elif "methotrexate" in d_name:
         action_text = f"⚠️ WEEKLY Dosing: {recommended_dose:.0f} mg ONCE PER WEEK ONLY."
-        split_plan = f"• Designated Day: {recommended_dose:.0f} mg once a week (e.g., every Sunday morning)\n• All Other Days: DO NOT TAKE METHOTREXATE"
-        clinical_note = "CRITICAL WARNING: Methotrexate is taken once weekly, NOT daily. Folic acid is usually prescribed on off-days."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Designated day once weekly (e.g. Sunday morning)"
+        clinical_note = "CRITICAL WARNING: Methotrexate is taken once a week, never daily."
 
     elif "hydroxychloroquine" in d_name:
         action_text = f"🔄 DMARD: {recommended_dose:.0f} mg/day."
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg with food\n• Afternoon: None\n• Night: None"
-        clinical_note = "Take with food or a glass of milk. Requires annual ophthalmology exams."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "With breakfast or milk"
+        clinical_note = "Take with food or a glass of milk."
 
-    # Generic Fallback
+    # Fallback
     else:
-        action_text = f"Recommended Daily Dose: {recommended_dose:.0f} mg (Current: {current_dose:.0f} mg)"
-        split_plan = f"• Morning (Breakfast): {recommended_dose:.0f} mg\n• Afternoon: None\n• Night: None"
-        clinical_note = "Take strictly according to your physician's schedule."
+        morning_dose = f"{recommended_dose:.0f} mg"
+        morning_timing = "Morning with water"
+        action_text = f"Target Dose: {recommended_dose:.0f} mg/day"
+        clinical_note = "Take strictly according to physician instructions."
+
+    split_plan_text = f"• Morning: {morning_dose} ({morning_timing})\n• Afternoon: {afternoon_dose} ({afternoon_timing})\n• Night: {night_dose} ({night_timing})"
 
     return {
         "action_text": action_text,
-        "split_plan": split_plan,
+        "split_plan": split_plan_text,
+        "morning_dose": morning_dose,
+        "morning_timing": morning_timing,
+        "afternoon_dose": afternoon_dose,
+        "afternoon_timing": afternoon_timing,
+        "night_dose": night_dose,
+        "night_timing": night_timing,
         "clinical_note": clinical_note
     }
 
@@ -239,45 +301,45 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     # 1. TYPE 2 DIABETES
     # -------------------------------------------------------------
     if condition == "Diabetes":
-        fbs = vitals.get("fbs", 110)
-        ppbs = vitals.get("ppbs", 140)
-        hba1c = vitals.get("hba1c", 6.5)
+        fbs = float(vitals.get("fbs", 110))
+        ppbs = float(vitals.get("ppbs", 140))
+        hba1c = float(vitals.get("hba1c", 6.5))
 
         if "metformin" in d_lower:
             if egfr < 30:
                 recommended_dose = 0.0
                 status = "Contraindicated / Renal Risk"
                 dose_correct = False
-                reasons.append(f"CRITICAL: eGFR is {egfr} mL/min (<30). Metformin is contraindicated due to severe lactic acidosis risk.")
+                reasons.append(f"CRITICAL: eGFR is {egfr:.0f} mL/min (<30). Metformin is contraindicated due to severe lactic acidosis risk.")
             elif egfr < 45:
                 if current_dose > 1000:
                     recommended_dose = 1000.0
                     status = "Renal Dose Reduction"
                     dose_correct = False
-                    reasons.append(f"Renal Impairment (eGFR {egfr} mL/min): Metformin dosage capped at 1000 mg/day max.")
+                    reasons.append(f"Renal Impairment (eGFR {egfr:.0f} mL/min): Metformin dosage capped at 1000 mg/day max.")
             else:
                 if hba1c > 7.0 or fbs > 130 or ppbs > 180:
                     if current_dose < 2000:
                         recommended_dose = min(current_dose + 500, 2000)
                         status = "Titration Up Recommended"
                         dose_correct = False
-                        reasons.append(f"Uncontrolled Glycemia (HbA1c: {hba1c}%, FBS: {fbs} mg/dL). Step up dose toward 2000 mg ceiling.")
+                        reasons.append(f"Uncontrolled Glycemia (HbA1c: {hba1c}%, FBS: {fbs:.0f} mg/dL). Step up dose toward 2000 mg ceiling.")
                     else:
                         reasons.append("Max therapeutic Metformin dose (2000 mg) reached. Consider adding dual-agent therapy (SGLT2i or DPP-4i).")
                 else:
-                    reasons.append(f"Glycemic metrics well controlled (HbA1c {hba1c}%, FBS {fbs} mg/dL). Current dose is optimal.")
+                    reasons.append(f"Glycemic metrics well controlled (HbA1c {hba1c}%, FBS {fbs:.0f} mg/dL). Current dose is optimal.")
 
         elif "glimepiride" in d_lower or "gliclazide" in d_lower:
             if egfr < 30:
                 recommended_dose = 0.0
                 status = "Contraindicated / Hypoglycemia Risk"
                 dose_correct = False
-                reasons.append(f"Severe renal impairment (eGFR {egfr} mL/min). Discontinue sulfonylureas due to prolonged half-life and lethal hypoglycemia risk.")
+                reasons.append(f"Severe renal impairment (eGFR {egfr:.0f} mL/min). Discontinue sulfonylureas due to prolonged half-life and lethal hypoglycemia risk.")
             elif fbs < 70 or ppbs < 90:
                 recommended_dose = max(current_dose - 1.0, 0.0)
                 status = "Hypoglycemia Alert"
                 dose_correct = False
-                reasons.append(f"Hypoglycemia flagged (FBS {fbs} mg/dL). Dose reduction or discontinuation advised.")
+                reasons.append(f"Hypoglycemia flagged (FBS {fbs:.0f} mg/dL). Dose reduction or discontinuation advised.")
             elif hba1c > 7.5 or fbs > 140:
                 max_ceiling = 4.0 if "glimepiride" in d_lower else 160.0
                 step = 1.0 if "glimepiride" in d_lower else 40.0
@@ -296,12 +358,12 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 recommended_dose = max(current_dose - 4.0, 4.0)
                 status = "Hypoglycemia Reduction"
                 dose_correct = False
-                reasons.append(f"Hypoglycemia detected (FBS {fbs} mg/dL). Reduce total daily insulin by 10-20% immediately.")
+                reasons.append(f"Hypoglycemia detected (FBS {fbs:.0f} mg/dL). Reduce total daily insulin by 10-20% immediately.")
             elif fbs > 180 or hba1c > 8.0:
                 recommended_dose = current_dose + 4.0
                 status = "Titration Up"
                 dose_correct = False
-                reasons.append(f"Persistent fasting hyperglycemia (FBS {fbs} mg/dL). Increase daily basal dose by 2-4 Units.")
+                reasons.append(f"Persistent fasting hyperglycemia (FBS {fbs:.0f} mg/dL). Increase daily basal dose by 2-4 Units.")
             else:
                 reasons.append("Insulin dosing maintains target fasting glucose.")
 
@@ -309,8 +371,8 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     # 2. HYPERTENSION
     # -------------------------------------------------------------
     elif condition == "Hypertension":
-        sbp = vitals.get("systolic_bp", 120)
-        dbp = vitals.get("diastolic_bp", 80)
+        sbp = float(vitals.get("systolic_bp", 120))
+        dbp = float(vitals.get("diastolic_bp", 80))
 
         if sbp >= 140 or dbp >= 90:
             status = "Uncontrolled Hypertension"
@@ -318,54 +380,54 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
             if "amlodipine" in d_lower:
                 if current_dose < 10.0:
                     recommended_dose = 10.0
-                    reasons.append(f"BP elevated ({sbp}/{dbp} mmHg). Titrate Amlodipine from 5 mg to 10 mg daily.")
+                    reasons.append(f"BP elevated ({sbp:.0f}/{dbp:.0f} mmHg). Titrate Amlodipine from 5 mg to 10 mg daily.")
                 else:
-                    reasons.append(f"BP uncontrolled at max Amlodipine (10 mg). Recommend adding an ARB (Telmisartan) or ACEi.")
+                    reasons.append("BP uncontrolled at max Amlodipine (10 mg). Recommend adding an ARB (Telmisartan) or ACEi.")
             elif "telmisartan" in d_lower:
                 if current_dose < 80.0:
                     recommended_dose = min(current_dose + 40.0, 80.0)
-                    reasons.append(f"BP elevated ({sbp}/{dbp} mmHg). Increase Telmisartan to {recommended_dose} mg.")
+                    reasons.append(f"BP elevated ({sbp:.0f}/{dbp:.0f} mmHg). Increase Telmisartan to {recommended_dose:.0f} mg.")
                 else:
-                    reasons.append("Max Telmisartan (80 mg) reached. Recommend combination therapy with Amlodipine or Chlorthalidone.")
+                    reasons.append("Max Telmisartan (80 mg) reached. Recommend combination therapy with Amlodipine.")
             elif "lisinopril" in d_lower:
                 if current_dose < 40.0:
                     recommended_dose = min(current_dose + 10.0, 40.0)
-                    reasons.append(f"BP elevated ({sbp}/{dbp} mmHg). Increase Lisinopril to {recommended_dose} mg.")
+                    reasons.append(f"BP elevated ({sbp:.0f}/{dbp:.0f} mmHg). Increase Lisinopril to {recommended_dose:.0f} mg.")
         elif sbp < 95 or dbp < 60:
             status = "Hypotension Warning"
             dose_correct = False
             recommended_dose = max(current_dose / 2.0, 2.5)
-            reasons.append(f"Hypotension risk flagged (BP {sbp}/{dbp} mmHg). Reduce dosage to prevent orthostatic dizziness.")
+            reasons.append(f"Hypotension risk flagged (BP {sbp:.0f}/{dbp:.0f} mmHg). Reduce dosage to prevent orthostatic dizziness.")
         else:
-            reasons.append(f"Blood pressure is within clinical target (<130/80 mmHg). Maintain current dosage.")
+            reasons.append("Blood pressure is within clinical target (<130/80 mmHg). Maintain current dosage.")
 
     # -------------------------------------------------------------
     # 3. THYROID DISORDERS
     # -------------------------------------------------------------
     elif condition == "Thyroid Disorders":
-        tsh = vitals.get("tsh", 2.0)
-        free_t4 = vitals.get("free_t4", 1.2)
+        tsh = float(vitals.get("tsh", 2.0))
+        free_t4 = float(vitals.get("free_t4", 1.2))
 
         if "levothyroxine" in d_lower:
             if tsh > 4.5:
                 status = "Hypothyroidism / Under-replaced"
                 dose_correct = False
                 recommended_dose = current_dose + 25.0
-                reasons.append(f"TSH elevated at {tsh} mIU/L (Target: 0.4-4.0). Increase Levothyroxine by 25 mcg/day.")
+                reasons.append(f"TSH elevated at {tsh:.1f} mIU/L (Target: 0.4-4.0). Increase Levothyroxine by 25 mcg/day.")
             elif tsh < 0.3:
                 status = "Hyperthyroidism / Over-replaced"
                 dose_correct = False
                 recommended_dose = max(current_dose - 25.0, 25.0)
-                reasons.append(f"TSH suppressed at {tsh} mIU/L. Reduce Levothyroxine by 25 mcg/day to prevent cardiac arrhythmias.")
+                reasons.append(f"TSH suppressed at {tsh:.1f} mIU/L. Reduce Levothyroxine by 25 mcg/day.")
             else:
-                reasons.append(f"TSH ({tsh} mIU/L) is euthyroid. Maintain current Levothyroxine dose.")
+                reasons.append(f"TSH ({tsh:.1f} mIU/L) is euthyroid. Maintain current Levothyroxine dose.")
 
         elif "methimazole" in d_lower:
             if tsh < 0.1 and free_t4 > 1.8:
                 status = "Active Hyperthyroidism"
                 dose_correct = False
                 recommended_dose = min(current_dose + 5.0, 30.0)
-                reasons.append(f"Free T4 elevated ({free_t4} ng/dL). Increase Methimazole to control thyrotoxicosis.")
+                reasons.append(f"Free T4 elevated ({free_t4:.1f} ng/dL). Increase Methimazole to control thyrotoxicosis.")
             elif tsh > 4.0:
                 status = "Overtreatment Hypothyroidism"
                 dose_correct = False
@@ -378,34 +440,34 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     # 4. HYPERLIPIDEMIA
     # -------------------------------------------------------------
     elif condition == "Hyperlipidemia":
-        ldl = vitals.get("ldl_cholesterol", 110)
-        tg = vitals.get("triglycerides", 160)
+        ldl = float(vitals.get("ldl_cholesterol", 110))
+        tg = float(vitals.get("triglycerides", 160))
 
         if "atorvastatin" in d_lower:
             if alt > 120:
                 recommended_dose = 0.0
                 status = "Hepatic Safety Hold"
                 dose_correct = False
-                reasons.append(f"Liver ALT is {alt} U/L (>3x ULN). Suspend statin therapy until transaminases normalize.")
+                reasons.append(f"Liver ALT is {alt:.0f} U/L (>3x ULN). Suspend statin therapy until transaminases normalize.")
             elif ldl > 100:
                 status = "Suboptimal LDL Control"
                 dose_correct = False
                 recommended_dose = min(current_dose * 2.0, 80.0)
-                reasons.append(f"LDL elevated at {ldl} mg/dL (Goal <70-100). Step up statin intensity to {recommended_dose:.0f} mg.")
+                reasons.append(f"LDL elevated at {ldl:.0f} mg/dL (Goal <70-100). Step up statin intensity to {recommended_dose:.0f} mg.")
             else:
-                reasons.append(f"LDL cholesterol ({ldl} mg/dL) meets cardioprotective target.")
+                reasons.append(f"LDL cholesterol ({ldl:.0f} mg/dL) meets cardioprotective target.")
 
         elif "rosuvastatin" in d_lower:
             if alt > 120:
                 recommended_dose = 0.0
                 status = "Hepatic Hold"
                 dose_correct = False
-                reasons.append(f"Elevated ALT ({alt} U/L). Discontinue Rosuvastatin temporarily.")
+                reasons.append(f"Elevated ALT ({alt:.0f} U/L). Discontinue Rosuvastatin temporarily.")
             elif ldl > 100:
                 status = "Suboptimal LDL"
                 dose_correct = False
                 recommended_dose = min(current_dose + 10.0, 40.0)
-                reasons.append(f"LDL is {ldl} mg/dL. Increase Rosuvastatin to {recommended_dose:.0f} mg.")
+                reasons.append(f"LDL is {ldl:.0f} mg/dL. Increase Rosuvastatin to {recommended_dose:.0f} mg.")
             else:
                 reasons.append("Lipid targets optimal on Rosuvastatin.")
 
@@ -414,16 +476,16 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 recommended_dose = 0.0
                 status = "Contraindicated in CKD"
                 dose_correct = False
-                reasons.append(f"eGFR {egfr} mL/min (<30). Fenofibrate contraindicated due to acute renal decline risk.")
+                reasons.append(f"eGFR {egfr:.0f} mL/min (<30). Fenofibrate contraindicated due to acute renal decline risk.")
             elif tg > 200:
-                reasons.append(f"Triglycerides elevated ({tg} mg/dL). Maintain or consider lifestyle modifications.")
+                reasons.append(f"Triglycerides elevated ({tg:.0f} mg/dL). Maintain or consider lifestyle modifications.")
 
     # -------------------------------------------------------------
     # 5. CHRONIC KIDNEY DISEASE (CKD)
     # -------------------------------------------------------------
     elif condition == "Chronic Kidney Disease":
-        ckd_egfr = vitals.get("egfr", egfr)
-        uacr = vitals.get("uacr", 50)
+        ckd_egfr = float(vitals.get("egfr", egfr))
+        uacr = float(vitals.get("uacr", 50))
 
         if "allopurinol" in d_lower:
             if ckd_egfr < 30:
@@ -431,13 +493,13 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 if current_dose > 100.0:
                     status = "Renal Capped Dose"
                     dose_correct = False
-                    reasons.append(f"Severe CKD (eGFR {ckd_egfr}). Allopurinol capped at 100 mg/day max to prevent DRESS/Stevens-Johnson syndrome.")
+                    reasons.append(f"Severe CKD (eGFR {ckd_egfr:.0f}). Allopurinol capped at 100 mg/day max.")
             elif ckd_egfr < 60:
                 recommended_dose = min(current_dose, 200.0)
                 if current_dose > 200.0:
                     status = "Renal Dose Adjusted"
                     dose_correct = False
-                    reasons.append(f"Moderate CKD (eGFR {ckd_egfr}). Allopurinol capped at 200 mg/day.")
+                    reasons.append(f"Moderate CKD (eGFR {ckd_egfr:.0f}). Allopurinol capped at 200 mg/day.")
             else:
                 reasons.append("Kidney function supports standard Allopurinol clearance.")
 
@@ -446,55 +508,55 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 recommended_dose = 0.0
                 status = "Contraindicated"
                 dose_correct = False
-                reasons.append(f"eGFR {ckd_egfr} mL/min is below initiation cutoff (<20). Hold SGLT2 inhibitor.")
+                reasons.append(f"eGFR {ckd_egfr:.0f} mL/min is below initiation cutoff (<20). Hold SGLT2 inhibitor.")
             else:
-                reasons.append(f"eGFR ({ckd_egfr} mL/min) meets nephroprotective criteria for Dapagliflozin 10 mg.")
+                reasons.append(f"eGFR ({ckd_egfr:.0f} mL/min) meets nephroprotective criteria for Dapagliflozin 10 mg.")
 
     # -------------------------------------------------------------
     # 6. ASTHMA / COPD
     # -------------------------------------------------------------
     elif condition == "Asthma / COPD":
-        fev1 = vitals.get("fev1_percent", 75)
-        peak_flow = vitals.get("peak_flow", 350)
+        fev1 = float(vitals.get("fev1_percent", 75))
+        peak_flow = float(vitals.get("peak_flow", 350))
 
         if fev1 < 60:
             status = "Poor Respiratory Control"
             dose_correct = False
             if "budenoside" in d_lower or "budesonide" in d_lower:
                 recommended_dose = min(current_dose * 2.0, 800.0)
-                reasons.append(f"FEV1 markedly reduced ({fev1}%). Step up inhaled corticosteroid to {recommended_dose:.0f} mcg twice daily.")
+                reasons.append(f"FEV1 markedly reduced ({fev1:.0f}%). Step up inhaled corticosteroid to {recommended_dose:.0f} mcg twice daily.")
             elif "salbutamol" in d_lower or "albuterol" in d_lower:
                 reasons.append("Frequent rescue inhaler need indicates poor disease control. Add daily controller ICS therapy.")
         else:
-            reasons.append(f"FEV1 ({fev1}%) and peak flow indicate stable airway mechanics.")
+            reasons.append(f"FEV1 ({fev1:.0f}%) and peak flow indicate stable airway mechanics.")
 
     # -------------------------------------------------------------
     # 7. HEART FAILURE
     # -------------------------------------------------------------
     elif condition == "Heart Failure":
-        ef = vitals.get("ejection_fraction", 45)
-        bnp = vitals.get("bnp", 150)
+        ef = float(vitals.get("ejection_fraction", 45))
+        bnp = float(vitals.get("bnp", 150))
 
         if "furosemide" in d_lower:
             if bnp > 400:
                 status = "Volume Overload / Congestion"
                 dose_correct = False
                 recommended_dose = min(current_dose + 20.0, 160.0)
-                reasons.append(f"Elevated BNP ({bnp} pg/mL) indicates fluid retention. Titrate Furosemide up to {recommended_dose:.0f} mg.")
+                reasons.append(f"Elevated BNP ({bnp:.0f} pg/mL) indicates fluid retention. Titrate Furosemide up to {recommended_dose:.0f} mg.")
             elif bnp < 100 and egfr < 45:
                 status = "Dehydration / Over-diuresis"
                 dose_correct = False
                 recommended_dose = max(current_dose - 20.0, 20.0)
                 reasons.append("Low BNP with worsening renal function suggests over-diuresis. Reduce loop diuretic.")
             else:
-                reasons.append(f"Ejection fraction ({ef}%) and BNP ({bnp} pg/mL) stable on current regimen.")
+                reasons.append(f"Ejection fraction ({ef:.0f}%) and BNP ({bnp:.0f} pg/mL) stable on current regimen.")
 
         elif "spironolactone" in d_lower:
             if egfr < 30:
                 recommended_dose = 0.0
                 status = "Hyperkalemia Safety Hold"
                 dose_correct = False
-                reasons.append(f"eGFR {egfr} mL/min (<30). Discontinue Spironolactone due to fatal hyperkalemia risk.")
+                reasons.append(f"eGFR {egfr:.0f} mL/min (<30). Discontinue Spironolactone due to fatal hyperkalemia risk.")
             else:
                 reasons.append("Aldosterone antagonist well tolerated at current renal status.")
 
@@ -502,36 +564,35 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     # 8. DEPRESSION / ANXIETY
     # -------------------------------------------------------------
     elif condition == "Depression / Anxiety":
-        phq9 = vitals.get("phq9", 8)
-        gad7 = vitals.get("gad7", 6)
+        phq9 = float(vitals.get("phq9", 8))
+        gad7 = float(vitals.get("gad7", 6))
 
         if "sertraline" in d_lower:
             if phq9 >= 15:
                 status = "Inadequate Symptom Remission"
                 dose_correct = False
                 recommended_dose = min(current_dose + 50.0, 200.0)
-                reasons.append(f"PHQ-9 score {phq9} indicates moderate-to-severe depression. Titrate Sertraline toward {recommended_dose:.0f} mg.")
+                reasons.append(f"PHQ-9 score {phq9:.0f} indicates moderate-to-severe depression. Titrate Sertraline toward {recommended_dose:.0f} mg.")
             elif phq9 < 5:
-                reasons.append(f"PHQ-9 score {phq9} indicates clinical remission. Maintain current dosage.")
+                reasons.append(f"PHQ-9 score {phq9:.0f} indicates clinical remission. Maintain current dosage.")
         elif "escitalopram" in d_lower:
             if phq9 >= 15 or gad7 >= 12:
                 status = "Inadequate Response"
                 dose_correct = False
                 recommended_dose = min(current_dose + 5.0, 20.0)
-                reasons.append(f"High depression/anxiety scores (PHQ-9: {phq9}, GAD-7: {gad7}). Increase Escitalopram to {recommended_dose:.0f} mg.")
+                reasons.append(f"High depression/anxiety scores (PHQ-9: {phq9:.0f}, GAD-7: {gad7:.0f}). Increase Escitalopram to {recommended_dose:.0f} mg.")
         elif "venlafaxine" in d_lower:
             if phq9 >= 15:
                 recommended_dose = min(current_dose + 37.5, 225.0)
                 status = "Titration Up"
                 dose_correct = False
-                reasons.append(f"Elevated PHQ-9 ({phq9}). Step up Venlafaxine to {recommended_dose:.1f} mg.")
+                reasons.append(f"Elevated PHQ-9 ({phq9:.0f}). Step up Venlafaxine to {recommended_dose:.1f} mg.")
 
     # -------------------------------------------------------------
     # 9. GOUT / HYPERURICEMIA
     # -------------------------------------------------------------
     elif condition == "Gout / Hyperuricemia":
-        uric_acid = vitals.get("uric_acid", 6.0)
-        flares = vitals.get("flares_per_year", 0)
+        uric_acid = float(vitals.get("uric_acid", 6.0))
 
         if "allopurinol" in d_lower:
             if egfr < 30:
@@ -539,21 +600,21 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 if current_dose > 100.0:
                     status = "Renal Dose Reduction"
                     dose_correct = False
-                    reasons.append(f"CKD Stage 4 (eGFR {egfr}). Allopurinol capped at 100 mg daily.")
+                    reasons.append(f"CKD Stage 4 (eGFR {egfr:.0f}). Allopurinol capped at 100 mg daily.")
             elif uric_acid > 6.0:
                 status = "Target Not Achieved"
                 dose_correct = False
                 recommended_dose = min(current_dose + 100.0, 800.0)
-                reasons.append(f"Serum uric acid is {uric_acid} mg/dL (Goal <6.0 mg/dL). Titrate Allopurinol to {recommended_dose:.0f} mg/day.")
+                reasons.append(f"Serum uric acid is {uric_acid:.1f} mg/dL (Goal <6.0 mg/dL). Titrate Allopurinol to {recommended_dose:.0f} mg/day.")
             else:
-                reasons.append(f"Serum uric acid ({uric_acid} mg/dL) meets therapeutic target.")
+                reasons.append(f"Serum uric acid ({uric_acid:.1f} mg/dL) meets therapeutic target.")
 
         elif "febuxostat" in d_lower:
             if uric_acid > 6.0 and current_dose < 80.0:
                 recommended_dose = 80.0
                 status = "Titrate Up"
                 dose_correct = False
-                reasons.append(f"Uric acid elevated ({uric_acid} mg/dL). Increase Febuxostat to 80 mg.")
+                reasons.append(f"Uric acid elevated ({uric_acid:.1f} mg/dL). Increase Febuxostat to 80 mg.")
             else:
                 reasons.append("Uric acid controlled on Febuxostat.")
 
@@ -562,34 +623,34 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 recommended_dose = 0.3
                 status = "Renal Dose Reduction"
                 dose_correct = False
-                reasons.append(f"Severe renal impairment (eGFR {egfr}). Reduce Colchicine to 0.3 mg or alternative days to avoid neuro-myopathy.")
+                reasons.append(f"Severe renal impairment (eGFR {egfr:.0f}). Reduce Colchicine to 0.3 mg to avoid toxicity.")
 
     # -------------------------------------------------------------
     # 10. ATRIAL FIBRILLATION
     # -------------------------------------------------------------
     elif condition == "Atrial Fibrillation":
-        inr = vitals.get("inr", 2.5)
+        inr = float(vitals.get("inr", 2.5))
 
         if "warfarin" in d_lower:
             if inr > 3.5:
                 status = "Supratherapeutic INR / Major Bleed Risk"
                 dose_correct = False
                 recommended_dose = max(current_dose * 0.8, 1.0)
-                reasons.append(f"CRITICAL: INR is {inr} (>3.0 target). Hold 1 dose and reduce weekly Warfarin by 15-20%.")
+                reasons.append(f"CRITICAL: INR is {inr:.1f} (>3.0 target). Hold 1 dose and reduce weekly Warfarin by 15-20%.")
             elif inr < 2.0:
                 status = "Subtherapeutic INR / Thromboembolism Risk"
                 dose_correct = False
                 recommended_dose = current_dose * 1.15
-                reasons.append(f"INR is {inr} (<2.0 target). Increase weekly Warfarin dose by 10-15%.")
+                reasons.append(f"INR is {inr:.1f} (<2.0 target). Increase weekly Warfarin dose by 10-15%.")
             else:
-                reasons.append(f"INR is within therapeutic window (2.0 - 3.0). Dosing is optimal.")
+                reasons.append("INR is within therapeutic window (2.0 - 3.0). Dosing is optimal.")
 
         elif "apixaban" in d_lower:
             if egfr < 25:
                 recommended_dose = 2.5
                 status = "Renal Dose Adjustment"
                 dose_correct = False
-                reasons.append(f"Reduced eGFR ({egfr} mL/min). Reduce Apixaban to 2.5 mg twice daily.")
+                reasons.append(f"Reduced eGFR ({egfr:.0f} mL/min). Reduce Apixaban to 2.5 mg twice daily.")
             else:
                 reasons.append("Standard Apixaban 5 mg BID dosing safe at current renal function.")
 
@@ -598,7 +659,7 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
                 recommended_dose = 15.0
                 status = "Renal Dose Adjustment"
                 dose_correct = False
-                reasons.append(f"Moderate renal impairment (eGFR {egfr} mL/min). Reduce Rivaroxaban to 15 mg once daily.")
+                reasons.append(f"Moderate renal impairment (eGFR {egfr:.0f} mL/min). Reduce Rivaroxaban to 15 mg once daily.")
             else:
                 reasons.append("Standard Rivaroxaban 20 mg once daily is appropriate.")
 
@@ -606,37 +667,37 @@ def evaluate_disease_management(condition, drug_name, current_dose, vitals, egfr
     # 11. RHEUMATOID ARTHRITIS
     # -------------------------------------------------------------
     elif condition == "Rheumatoid Arthritis":
-        crp = vitals.get("crp", 3.0)
-        esr = vitals.get("esr", 15)
+        crp = float(vitals.get("crp", 3.0))
+        esr = float(vitals.get("esr", 15))
 
         if "methotrexate" in d_lower:
             if egfr < 30:
                 recommended_dose = 0.0
                 status = "Contraindicated in Severe CKD"
                 dose_correct = False
-                reasons.append(f"eGFR {egfr} mL/min (<30). Methotrexate is contraindicated due to toxic bone marrow suppression.")
+                reasons.append(f"eGFR {egfr:.0f} mL/min (<30). Methotrexate is contraindicated due to toxic bone marrow suppression.")
             elif alt > 80:
                 recommended_dose = 0.0
                 status = "Hepatotoxicity Hold"
                 dose_correct = False
-                reasons.append(f"ALT elevated at {alt} U/L (>2x ULN). Suspend Methotrexate and re-evaluate transaminases.")
+                reasons.append(f"ALT elevated at {alt:.0f} U/L (>2x ULN). Suspend Methotrexate and re-evaluate.")
             elif crp > 10.0 or esr > 30:
                 if current_dose < 25.0:
                     recommended_dose = min(current_dose + 2.5, 25.0)
                     status = "Titrate Up (Weekly)"
                     dose_correct = False
-                    reasons.append(f"Elevated inflammatory markers (CRP: {crp} mg/L, ESR: {esr} mm/hr). Increase weekly dose toward 20-25 mg.")
+                    reasons.append(f"Elevated inflammatory markers (CRP: {crp:.1f} mg/L, ESR: {esr:.0f} mm/hr). Increase weekly dose toward 20-25 mg.")
                 else:
-                    reasons.append("Maximum tolerated weekly Methotrexate dose reached. Consider biologic DMARD addition.")
+                    reasons.append("Maximum tolerated weekly Methotrexate dose reached.")
             else:
-                reasons.append(f"Inflammatory biomarkers normalized (CRP {crp} mg/L, ESR {esr} mm/hr).")
+                reasons.append("Inflammatory biomarkers normalized.")
 
         elif "hydroxychloroquine" in d_lower:
             if egfr < 30:
                 recommended_dose = min(current_dose * 0.75, 200.0)
                 status = "Renal Dose Reduction"
                 dose_correct = False
-                reasons.append(f"eGFR {egfr} mL/min. Reduce Hydroxychloroquine to prevent ocular and systemic accumulation.")
+                reasons.append(f"eGFR {egfr:.0f} mL/min. Reduce Hydroxychloroquine to prevent systemic accumulation.")
             else:
                 reasons.append("Standard Hydroxychloroquine dosing maintains disease stability.")
 
