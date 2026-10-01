@@ -69,7 +69,6 @@ st.markdown("""
         border: 1px solid #EF4444;
     }
 
-    /* Pulsing Interactive Tutorial Banner */
     .tutorial-pointer {
         background: linear-gradient(90deg, #F59E0B 0%, #D97706 100%);
         color: white;
@@ -143,7 +142,7 @@ def show_ai_assistant_dialog():
 
         system_instruction = (
             "You are HelixRx AI, an expert multilingual clinical pharmacogenomics (PGx) and medication safety assistant. "
-            "Respond naturally in whatever language the user asks their question in (e.g., English, Telugu, Hindi, Spanish). "
+            "Respond naturally in whatever language the user asks their question in (e.g., English, Telugu, Hindi, Swahili). "
             "Provide clear, clinically accurate answers regarding medications, dosages, meal administration timing (Breakfast, Lunch, Dinner), "
             "organ clearance (eGFR, ALT), and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
             "while maintaining strict medical accuracy. Always include a brief reminder to consult their healthcare provider."
@@ -242,8 +241,8 @@ else:
     # A. PATIENT PORTAL (MULTI-DRUG & MEAL-BY-MEAL ASSISTANCE)
     # =========================================================
     if st.session_state.user_role == "Patient":
-       selected_lang = st.sidebar.selectbox("🌐 Choose Language", ["English", "Telugu", "Hindi", "Swahili (Kiswahili)"])
-        # Session state for interactive step-by-step tour
+        selected_lang = st.sidebar.selectbox("🌐 Choose Language / Lugha", ["English", "Telugu", "Hindi", "Swahili (Kiswahili)"])
+
         if "tutorial_active" not in st.session_state:
             st.session_state.tutorial_active = False
         if "tutorial_step" not in st.session_state:
@@ -371,7 +370,7 @@ else:
                 "meal_header": "🍽️ Mpango wa Kumeza Vidonge Kulingana na Milo:",
                 "details_title": "🩺 Sababu za Kitabibu:",
                 "safety_note": "💡 **Ujumbe wa Usalama:** Tafadhali wasiliana na daktari wako kabla ya kubadilisha dozi au ratiba ya kumeza dawa.",
-                "explain_btn": "🗣️ Eleza kwa Kiswahili Rahisi",
+                "explain_btn": "🗣️️ Eleza kwa Kiswahili Rahisi",
                 "generating": "Maelezo kwa Kiswahili yanatayarishwa..."
             }
         }
@@ -499,7 +498,6 @@ else:
             if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
                 st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
 
-            # MULTI-DRUG SELECTION (Patients frequently take multiple meds e.g. Metformin + Glimepiride)
             default_selection = [med_options[0]] if med_options else []
             selected_meds = st.multiselect(
                 t["med_label"], 
@@ -571,7 +569,6 @@ else:
                 adv = res["meal_advice"]
 
                 with st.container(border=True):
-                    # Header with Safety Status
                     h_col1, h_col2 = st.columns([2.5, 1.5])
                     with h_col1:
                         st.markdown(f"### 💊 {med_name}")
@@ -609,7 +606,6 @@ else:
             if st.session_state.tutorial_active and st.session_state.tutorial_step == 5:
                 st.markdown(f'<div class="tutorial-pointer">{t["step5_tip"]}</div>', unsafe_allow_html=True)
 
-            # Multilingual Plain-Language Medical Explanation via Gemini
             if st.button(t["explain_btn"]):
                 with st.spinner(t["generating"]):
                     try:
@@ -617,7 +613,6 @@ else:
                         if api_key:
                             client = genai.Client(api_key=api_key)
                             
-                            # Build structured payload across all selected drugs
                             drugs_summary = []
                             for r in st.session_state.last_patient_batch:
                                 drugs_summary.append(
@@ -667,7 +662,6 @@ else:
 
         ml_predictor = VariantImpactPredictor()
 
-        # Sidebar Ingestion for Clinicians
         with st.sidebar:
             st.header("📥 Diagnostic & Genomic Ingestion")
             report_file = st.file_uploader("Upload Lab Report (PDF / TXT)", type=["pdf", "txt"], key="c_pdf_up")
@@ -709,7 +703,6 @@ else:
             alt = st.number_input("Liver ALT Transaminase (U/L)", 0, 500, int(parsed_alt), key="c_alt_val")
             uploaded_vcf = st.file_uploader("Upload Patient Genomic Sequence (.VCF)", type=["vcf"], key="c_vcf_up")
 
-        # Genomic Resolution
         if uploaded_vcf is not None:
             vcf_path = os.path.join("data", "raw_vcf", uploaded_vcf.name)
             os.makedirs(os.path.dirname(vcf_path), exist_ok=True)
@@ -726,7 +719,6 @@ else:
                 {"gene": "SLCO1B1", "phenotype": "Normal Metabolizer"}
             ]
 
-        # Tab 1: PGx & Polypharmacy
         with tab1:
             st.subheader("📋 Precision Prescribing Evaluations")
             if not selected_drugs:
@@ -766,7 +758,6 @@ else:
                                 for w in organ_eval['organ_warnings']:
                                     st.caption(f"• {w}")
 
-                        # PDF Report Generation
                         vcf_name = uploaded_vcf.name if uploaded_vcf else "Population_Baseline.vcf"
                         pdf_filename = f"Clinical_PGx_Report_{drug}_{idx}.pdf"
                         organ_eval['egfr_val'] = egfr
@@ -782,7 +773,6 @@ else:
                                     key=f"dl_btn_{idx}_{drug}_{h_idx}"
                                 )
 
-                # Polypharmacy Checks
                 if len(selected_drugs) > 1:
                     st.divider()
                     st.subheader("⚠️ Polypharmacy & Drug-Drug Interactions")
@@ -795,7 +785,6 @@ else:
                     else:
                         st.success("✅ No critical competitive enzymatic CYP450 interactions detected.")
 
-        # Tab 2: ML Variant Classifier
         with tab2:
             st.subheader("🤖 Random Forest Functional Impact Predictor")
             st.caption("Classifies unannotated, novel genomic variants as Pathogenic (Loss-of-Function) or Tolerated.")
@@ -817,7 +806,6 @@ else:
                     st.success(f"✅ **Prediction:** {res['prediction']} (Confidence: {res['confidence']})")
                     st.write("• **Clinical Implication:** Variant predicted to have benign or tolerated functional impact.")
 
-        # Tab 3: Dynamic PK Curves
         with tab3:
             st.subheader("📈 Dynamic Pharmacokinetic (PK) Concentration Modeling")
             st.caption("One-compartment oral absorption and elimination curve adjusted for organ impairment.")
@@ -844,7 +832,6 @@ else:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # Tab 4: EHR Clinical Audit Trail
         with tab4:
             st.subheader("📑 Clinical Audit Trail & EHR Summary")
             st.caption("HL7-FHIR structured summary of the patient's precision pharmacogenomic assessment.")
