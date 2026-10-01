@@ -242,8 +242,7 @@ else:
     # A. PATIENT PORTAL (MULTI-DRUG & MEAL-BY-MEAL ASSISTANCE)
     # =========================================================
     if st.session_state.user_role == "Patient":
-        selected_lang = st.sidebar.selectbox("🌐 Choose Language / భాష / भाषा", ["English", "Telugu", "Hindi", "Spanish"])
-
+       selected_lang = st.sidebar.selectbox("🌐 Choose Language", ["English", "Telugu", "Hindi", "Swahili (Kiswahili)"])
         # Session state for interactive step-by-step tour
         if "tutorial_active" not in st.session_state:
             st.session_state.tutorial_active = False
@@ -344,36 +343,36 @@ else:
                 "explain_btn": "🗣️ सरल हिंदी में स्पष्टीकरण प्राप्त करें",
                 "generating": "हिंदी में विवरण तैयार किया जा रहा है..."
             },
-            "Spanish": {
-                "portal_title": "Asistente Universal de Enfermedades y Medicamentos",
-                "portal_sub": "Verifique la seguridad del tratamiento y los ajustes de dosis por comida con sus últimos análisis.",
-                "start_tour_btn": "🎯 Iniciar Tour Guiado Paso a Paso",
-                "stop_tour_btn": "✖ Salir del Tour",
-                "step1_tip": "👇 PASO 1: Seleccione su enfermedad en este menú desplegable.",
-                "step2_tip": "👇 PASO 2: Ingrese aquí los valores de sus análisis de laboratorio.",
-                "step3_tip": "👉 PASO 3: Seleccione todos sus medicamentos e ingrese sus dosis diarias.",
-                "step4_tip": "👇 PASO 4: Ingrese su eGFR y presione este botón para evaluar!",
-                "step5_tip": "👇 PASO 5: Revise la administración por comida y presione para una explicación sencilla!",
-                "next_btn": "Siguiente ➡️",
-                "prev_btn": "⬅️ Anterior",
-                "finish_tour": "🎉 Finalizar Tour",
-                "col1_title": "1️⃣ Seleccione Enfermedad e Ingrese Parámetros",
-                "disease_label": "Diagnóstico Clínico",
-                "col2_title": "2️⃣ Medicamento(s) Prescrito(s) Actual(es)",
-                "med_label": "Seleccione todos los medicamentos que toma para esta condición:",
-                "egfr_label": "Métrica eGFR del Paciente (mL/min, default: 90)",
-                "eval_btn": "🔍 Evaluar Protocolo y Horario por Comida",
-                "results_header": "📊 Evaluación Clínica y Horario de Administración",
-                "safe_badge": "✅ LA DOSIS ACTUAL ES ÓPTIMA Y SEGURA",
-                "warn_badge": "⚠️ SE RECOMIENDA AJUSTE / TITULACIÓN",
-                "contra_badge": "⛔ CONTRAINDICADO / ADVERTENCIA DE SEGURIDAD RENAL",
-                "curr_dose": "Dosis Diaria Actual:",
-                "rec_dose": "Dosis Recomendada Ajustada:",
-                "meal_header": "🍽️ Horario de Administración por Comida:",
-                "details_title": "🩺 Detalles de la Evaluación Clínica:",
-                "safety_note": "💡 **Nota:** Consulte a su proveedor de atención médica antes de cambiar su dosis u horario.",
-                "explain_btn": "🗣️ Explicar en Español Sencillo",
-                "generating": "Generando explicación en español..."
+            "Swahili (Kiswahili)": {
+                "portal_title": "Msaidizi wa Magonjwa Mengi na Dawa za Kudumu",
+                "portal_sub": "Thibitisha usalama wa matibabu, vipimo vya afya, na mpango wa kugawa vidonge kulingana na milo.",
+                "start_tour_btn": "🎯 Anza Mwongozo wa Hatua kwa Hatua",
+                "stop_tour_btn": "✖ Toka Kwenye Mwongozo",
+                "step1_tip": "👇 HATUA YA 1: Chagua ugonjwa wako wa kudumu kwenye orodha hii.",
+                "step2_tip": "👇 HATUA YA 2: Weka matokeo ya vipimo vyako vya hivi karibuni hapa.",
+                "step3_tip": "👉 HATUA YA 3: Chagua dawa zote unazotumia na weka kiwango cha dozi ya kila siku.",
+                "step4_tip": "👇 HATUA YA 4: Weka kipimo cha figo (eGFR) na bonyeza kitufe hiki kufanya tathmini!",
+                "step5_tip": "👇 HATUA YA 5: Kagua mpango wa chakula hapa chini na bonyeza kwa maelezo rahisi ya AI!",
+                "next_btn": "Hatua Inayofuata ➡️",
+                "prev_btn": "⬅️ Nyuma",
+                "finish_tour": "🎉 Maliza Mwongozo",
+                "col1_title": "1️⃣ Chagua Ugonjwa & Weka Vipimo vya Afya",
+                "disease_label": "Uchunguzi wa Kitabibu (Diagnosis)",
+                "col2_title": "2️⃣ Dawa Unazotumia Hivi Sasa",
+                "med_label": "Chagua dawa zote unazotumia kwa ugonjwa huu:",
+                "egfr_label": "Kipimo cha Utendaji Kazi wa Figo - eGFR (mL/min, kawaida: 90)",
+                "eval_btn": "🔍 Tathmini Mpango wa Dawa Kulingana na Milo",
+                "results_header": "📊 Matokeo ya Tathmini na Ratiba ya Vidonge Kulingana na Milo",
+                "safe_badge": "✅ DOZI YA SASA NI SALAMA NA INAFAA",
+                "warn_badge": "⚠️ MABADILIKO YA DOZI YANASHAURIWA",
+                "contra_badge": "⛔ ONYO KALI: HATARI KWA FIGO / USITUMIE",
+                "curr_dose": "Dozi ya Sasa ya Kila Siku:",
+                "rec_dose": "Dozi Inayoshauriwa:",
+                "meal_header": "🍽️ Mpango wa Kumeza Vidonge Kulingana na Milo:",
+                "details_title": "🩺 Sababu za Kitabibu:",
+                "safety_note": "💡 **Ujumbe wa Usalama:** Tafadhali wasiliana na daktari wako kabla ya kubadilisha dozi au ratiba ya kumeza dawa.",
+                "explain_btn": "🗣️ Eleza kwa Kiswahili Rahisi",
+                "generating": "Maelezo kwa Kiswahili yanatayarishwa..."
             }
         }
 
