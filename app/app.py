@@ -91,13 +91,11 @@ st.markdown("""
 # -------------------------------------------------------------
 # SESSION STATE, QUERY PARAMETERS & VILLAGE MODE
 # -------------------------------------------------------------
-# Detect URL mode (e.g., https://helixrx-pgx.streamlit.app/?mode=village)
 query_params = st.query_params
 is_village_mode = query_params.get("mode") == "village"
 
 if "authenticated" not in st.session_state:
     if is_village_mode:
-        # Automatically authenticate and lock into the Patient Gateway
         st.session_state.authenticated = True
         st.session_state.user_role = "Patient"
         st.session_state.user_name = "Community Patient / Health Camp"
