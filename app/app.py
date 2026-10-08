@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import sys
+import time
 import numpy as np
 import plotly.graph_objects as go
 from google import genai
@@ -90,6 +91,45 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
+# MULTI-MODEL FALLBACK CALLER (PROTECTS AGAINST 503 / 404 / 429)
+# -------------------------------------------------------------
+def call_gemini_with_fallback(client, contents, system_instruction=None):
+    """
+    Attempts model generation with automated fallback across available models
+    to handle 503 (temporary high demand) and 429/404 server spikes.
+    """
+    candidate_models = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-3.8-flash"
+    ]
+
+    last_error = None
+    for model_name in candidate_models:
+        try:
+            config = {}
+            if system_instruction:
+                config["system_instruction"] = system_instruction
+
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config if config else None
+            )
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            err_str = str(e)
+            last_error = e
+            if "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str or "429" in err_str:
+                time.sleep(0.4)
+                continue
+            else:
+                break
+
+    raise last_error if last_error else RuntimeError("AI generation service is momentarily busy. Please try again.")
+
+# -------------------------------------------------------------
 # SESSION STATE, QUERY PARAMETERS & VILLAGE MODE
 # -------------------------------------------------------------
 query_params = st.query_params
@@ -165,12 +205,7 @@ def show_ai_assistant_dialog():
                 reply = "⚠️ API Key not configured. Please add `GEMINI_API_KEY` to your Streamlit Cloud Secrets."
             else:
                 client = genai.Client(api_key=api_key)
-                full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
-                response = client.models.generate_content(
-                    model="gemini-3.8-flash",
-                    contents=full_prompt,
-                )
-                reply = response.text
+                reply = call_gemini_with_fallback(client, user_prompt, system_instruction=system_instruction)
 
         except Exception as e:
             reply = f"⚠️ Clinical engine connection error: {str(e)}"
@@ -661,9 +696,6 @@ else:
         if "last_patient_batch" in st.session_state:
             st.subheader(t["results_header"])
 
-            # ---------------------------------------------------------
-            # 1. VISUAL "MEAL PILL BOX" CARDS
-            # ---------------------------------------------------------
             for res in st.session_state.last_patient_batch:
                 med_name = res["drug"]
                 adv = res["meal_advice"]
@@ -683,10 +715,8 @@ else:
 
                     st.markdown("#### 🍱 Daily Visual Pill Box Schedule")
 
-                    # 3 Styled Meal Columns
                     b_col, l_col, d_col = st.columns(3)
 
-                    # Morning Card
                     with b_col:
                         st.markdown(f"""
                         <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
@@ -696,7 +726,6 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # Afternoon Card
                     with l_col:
                         st.markdown(f"""
                         <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
@@ -706,7 +735,6 @@ else:
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # Night Card
                     with d_col:
                         st.markdown(f"""
                         <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #818cf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
@@ -818,11 +846,8 @@ else:
 
                             Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
                             """
-                            exp_res = client.models.generate_content(
-                                model="gemini-3.8-flash",
-                                contents=explain_prompt
-                            )
-                            st.success(exp_res.text)
+                            exp_text = call_gemini_with_fallback(client, explain_prompt)
+                            st.success(exp_text)
                         else:
                             st.warning("GEMINI_API_KEY not configured for dynamic explanations.")
                     except Exception as e:

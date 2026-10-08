@@ -8,6 +8,7 @@ structured clinical parameters.
 import os
 import re
 import json
+import time
 
 # Safe imports with fallback to prevent container boot failure
 try:
@@ -117,7 +118,7 @@ def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_k
     """
     Multimodal Vision Engine: Analyzes camera snaps of paper lab reports and
     medicine blister packaging to auto-extract biomarkers, diagnosed condition,
-    active generic molecules, and dose strengths.
+    active generic molecules, and dose strengths with automatic model fallback.
     """
     if not api_key:
         return {"error": "Gemini API key is not configured in secrets."}
@@ -176,13 +177,28 @@ def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_k
         contents.append("MEDICINE STRIP / PRESCRIPTION PHOTOGRAPH:")
         contents.append(meds_img)
 
+    candidate_models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.8-flash"]
+    raw_text = None
+    last_err = None
+
+    for model_name in candidate_models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents
+            )
+            if response and response.text:
+                raw_text = response.text.strip()
+                break
+        except Exception as e:
+            last_err = e
+            time.sleep(0.4)
+            continue
+
+    if not raw_text:
+        return {"error": f"Image analysis failure (server busy): {str(last_err)}"}
+
     try:
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=contents
-        )
-        raw_text = response.text.strip()
-        
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.startswith("```"):
@@ -193,4 +209,4 @@ def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_k
         parsed_json = json.loads(raw_text.strip())
         return parsed_json
     except Exception as e:
-        return {"error": f"Image parsing failure: {str(e)}"}
+        return {"error": f"JSON decode error: {str(e)}"}
