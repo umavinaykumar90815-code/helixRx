@@ -95,15 +95,18 @@ st.markdown("""
 # -------------------------------------------------------------
 def call_gemini_with_fallback(client, contents, system_instruction=None):
     """
-    Attempts model generation across multiple fallback models, catching 503 / 429 / 404
-    and retrying gracefully so the UI never displays an error.
+    Attempts model generation across lightweight & flagship fallback models,
+    cycling through separate server pools to bypass 503 demand spikes.
     """
     candidate_models = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
         "gemini-2.5-flash",
-        "gemini-2.5-pro",
-        "gemini-3.8-flash"
+        "gemini-2.5-pro"
     ]
 
+    last_error = None
     for model_name in candidate_models:
         for attempt in range(2):
             try:
@@ -118,13 +121,18 @@ def call_gemini_with_fallback(client, contents, system_instruction=None):
                 )
                 if response and response.text:
                     return response.text
-            except Exception:
-                time.sleep(1.0)
+            except Exception as e:
+                last_error = e
+                time.sleep(0.3)
                 continue
 
+    # Clean fallback explanation if all API endpoints are temporarily saturated
     return (
-        "⚠️ The clinical AI servers are currently experiencing peak global demand. "
-        "Please try clicking the button again in a few moments."
+        "💡 **Medication Guidelines & Clinical Overview:**\n\n"
+        "• Take your morning doses before or with breakfast as prescribed.\n"
+        "• Space multidose regimens across breakfast, lunch, and dinner to maintain stable blood drug levels.\n"
+        "• Monitor fasting and post-meal readings regularly.\n\n"
+        "*(Note: The AI explanation engine experienced peak traffic, showing default clinical safety guidelines. Please click again shortly for customized remarks.)*"
     )
 
 # -------------------------------------------------------------

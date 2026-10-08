@@ -177,7 +177,12 @@ def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_k
         contents.append("MEDICINE STRIP / PRESCRIPTION PHOTOGRAPH:")
         contents.append(meds_img)
 
-    candidate_models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.8-flash"]
+    candidate_models = [
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-2.5-flash"
+    ]
     raw_text = None
     last_err = None
 
