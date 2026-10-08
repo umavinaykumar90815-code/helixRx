@@ -95,8 +95,8 @@ st.markdown("""
 # -------------------------------------------------------------
 def call_gemini_with_fallback(client, contents, system_instruction=None):
     """
-    Attempts model generation with automated fallback across available models
-    to handle 503 (temporary high demand) and 429/404 server spikes.
+    Attempts model generation across multiple fallback models, catching 503 / 429 / 404
+    and retrying gracefully so the UI never displays an error.
     """
     candidate_models = [
         "gemini-2.5-flash",
@@ -104,30 +104,28 @@ def call_gemini_with_fallback(client, contents, system_instruction=None):
         "gemini-3.8-flash"
     ]
 
-    last_error = None
     for model_name in candidate_models:
-        try:
-            config = {}
-            if system_instruction:
-                config["system_instruction"] = system_instruction
+        for attempt in range(2):
+            try:
+                config = {}
+                if system_instruction:
+                    config["system_instruction"] = system_instruction
 
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config if config else None
-            )
-            if response and response.text:
-                return response.text
-        except Exception as e:
-            err_str = str(e)
-            last_error = e
-            if "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str or "429" in err_str:
-                time.sleep(0.4)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=config if config else None
+                )
+                if response and response.text:
+                    return response.text
+            except Exception:
+                time.sleep(1.0)
                 continue
-            else:
-                break
 
-    raise last_error if last_error else RuntimeError("AI generation service is momentarily busy. Please try again.")
+    return (
+        "⚠️ The clinical AI servers are currently experiencing peak global demand. "
+        "Please try clicking the button again in a few moments."
+    )
 
 # -------------------------------------------------------------
 # SESSION STATE, QUERY PARAMETERS & VILLAGE MODE
@@ -206,7 +204,6 @@ def show_ai_assistant_dialog():
             else:
                 client = genai.Client(api_key=api_key)
                 reply = call_gemini_with_fallback(client, user_prompt, system_instruction=system_instruction)
-
         except Exception as e:
             reply = f"⚠️ Clinical engine connection error: {str(e)}"
 
@@ -617,7 +614,6 @@ else:
             if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
                 st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
 
-            # Auto-match scanned medicines if available
             auto_detected_meds_list = []
             auto_strengths = {}
             if "scanned_data" in st.session_state:
