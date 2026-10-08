@@ -89,14 +89,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# SESSION STATE & AUTHENTICATION
+# SESSION STATE, QUERY PARAMETERS & VILLAGE MODE
 # -------------------------------------------------------------
+# Detect URL mode (e.g., https://helixrx-pgx.streamlit.app/?mode=village)
+query_params = st.query_params
+is_village_mode = query_params.get("mode") == "village"
+
 if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None
-if "user_name" not in st.session_state:
-    st.session_state.user_name = ""
+    if is_village_mode:
+        # Automatically authenticate and lock into the Patient Gateway
+        st.session_state.authenticated = True
+        st.session_state.user_role = "Patient"
+        st.session_state.user_name = "Community Patient / Health Camp"
+    else:
+        st.session_state.authenticated = False
+        st.session_state.user_role = None
+        st.session_state.user_name = ""
 
 DOCTOR_LOGINS = {"doctor@helix.org": "doctor123", "admin": "admin123"}
 PATIENT_LOGINS = {"patient@gmail.com": "patient123", "user1": "12345"}
