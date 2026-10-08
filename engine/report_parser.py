@@ -8,9 +8,22 @@ structured clinical parameters.
 import os
 import re
 import json
-from PIL import Image
-from google import genai
-from pypdf import PdfReader
+
+# Safe imports with fallback to prevent container boot failure
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 
 def parse_medical_report(file_path: str) -> dict:
@@ -24,14 +37,14 @@ def parse_medical_report(file_path: str) -> dict:
         return {"egfr": 90.0, "alt": 25.0, "notes": "File not found; defaulted to baseline."}
 
     # Extract text based on file format
-    if file_path.lower().endswith(".pdf"):
+    if file_path.lower().endswith(".pdf") and PdfReader is not None:
         try:
             reader = PdfReader(file_path)
             for page in reader.pages:
                 text = page.extract_text()
                 if text:
                     extracted_text += text + "\n"
-        except Exception as e:
+        except Exception:
             extracted_text = ""
     else:
         try:
@@ -92,7 +105,6 @@ def parse_medical_report(file_path: str) -> dict:
         except ValueError:
             pass
 
-    # Safe physiological defaults if missing
     if results["egfr"] is None:
         results["egfr"] = 90.0
     if results["alt"] is None:
@@ -101,7 +113,7 @@ def parse_medical_report(file_path: str) -> dict:
     return results
 
 
-def analyze_prescription_and_report_images(report_img: Image.Image = None, meds_img: Image.Image = None, api_key: str = "") -> dict:
+def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_key: str = "") -> dict:
     """
     Multimodal Vision Engine: Analyzes camera snaps of paper lab reports and
     medicine blister packaging to auto-extract biomarkers, diagnosed condition,
@@ -109,6 +121,9 @@ def analyze_prescription_and_report_images(report_img: Image.Image = None, meds_
     """
     if not api_key:
         return {"error": "Gemini API key is not configured in secrets."}
+
+    if genai is None:
+        return {"error": "google-genai package is not installed."}
 
     if report_img is None and meds_img is None:
         return {"error": "No images provided for analysis."}
@@ -154,10 +169,10 @@ def analyze_prescription_and_report_images(report_img: Image.Image = None, meds_
     )
 
     contents = [prompt]
-    if report_img:
+    if report_img is not None:
         contents.append("LAB REPORT PHOTOGRAPH:")
         contents.append(report_img)
-    if meds_img:
+    if meds_img is not None:
         contents.append("MEDICINE STRIP / PRESCRIPTION PHOTOGRAPH:")
         contents.append(meds_img)
 
@@ -168,7 +183,6 @@ def analyze_prescription_and_report_images(report_img: Image.Image = None, meds_
         )
         raw_text = response.text.strip()
         
-        # Clean potential markdown fences
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.startswith("```"):
