@@ -178,7 +178,7 @@ def analyze_prescription_and_report_images(report_img=None, meds_img=None, api_k
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.8-flash",
             contents=contents
         )
         raw_text = response.text.strip()

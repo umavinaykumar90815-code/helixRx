@@ -167,7 +167,7 @@ def show_ai_assistant_dialog():
                 client = genai.Client(api_key=api_key)
                 full_prompt = f"{system_instruction}\n\nUser Question: {user_prompt}"
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=full_prompt,
                 )
                 reply = response.text
@@ -819,7 +819,7 @@ else:
                             Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
                             """
                             exp_res = client.models.generate_content(
-                                model="gemini-2.5-flash",
+                                model="gemini-3.8-flash",
                                 contents=explain_prompt
                             )
                             st.success(exp_res.text)
