@@ -26,7 +26,7 @@ def get_db_connection():
 
 
 def init_db():
-    """Initializes tables and updates the admin account details."""
+    """Initializes tables and forces the admin account setup."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -74,40 +74,22 @@ def init_db():
         )
     """)
 
-    # =========================================================
-    # YOUR CONFIGURED ADMIN CREDENTIALS
-    # =========================================================
-    NEW_ADMIN_USER = "umavinaykumar90815@gmail.com"
-    NEW_ADMIN_NAME = "Vinay"
-    NEW_ADMIN_PHONE = "7981718577"
-    NEW_ADMIN_PASS = "admin123"  # Change this to whatever password you prefer
-    # =========================================================
+    # Admin Credentials
+    ADMIN_USER = "umavinaykumar90815@gmail.com"
+    ADMIN_NAME = "Vinay"
+    ADMIN_PHONE = "7981718577"
+    ADMIN_PASS = "admin123"
 
-    # Remove any existing conflicting record using this email so it becomes the pure Admin
-    cursor.execute("DELETE FROM users WHERE username = ? AND role != 'Admin'", (NEW_ADMIN_USER.strip().lower(),))
+    # Wipe any old instances of this username or old generic admin accounts to prevent conflict
+    cursor.execute("DELETE FROM users WHERE LOWER(username) = ? OR LOWER(username) = 'admin' OR role = 'Admin'", (ADMIN_USER.lower(),))
 
-    # Check if an admin role exists
-    cursor.execute("SELECT id FROM users WHERE role = 'Admin'")
-    existing_admin = cursor.fetchone()
+    # Insert clean Admin user
+    cursor.execute(
+        "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
+        (ADMIN_USER.lower(), ADMIN_NAME, ADMIN_PHONE, hash_password(ADMIN_PASS), "Admin")
+    )
 
-    if existing_admin:
-        cursor.execute("""
-            UPDATE users 
-            SET username = ?, full_name = ?, phone = ?, password_hash = ?
-            WHERE role = 'Admin'
-        """, (
-            NEW_ADMIN_USER.strip().lower(),
-            NEW_ADMIN_NAME.strip(),
-            NEW_ADMIN_PHONE.strip(),
-            hash_password(NEW_ADMIN_PASS)
-        ))
-    else:
-        cursor.execute(
-            "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
-            (NEW_ADMIN_USER.strip().lower(), NEW_ADMIN_NAME.strip(), NEW_ADMIN_PHONE.strip(), hash_password(NEW_ADMIN_PASS), "Admin")
-        )
-
-    # Pre-seed default demo accounts if missing
+    # Seed baseline demo accounts if missing
     cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Clinician'")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -152,13 +134,13 @@ def authenticate_user(username: str, password: str) -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, username, full_name, phone, role, password_hash FROM users WHERE username = ?",
+        "SELECT id, username, full_name, phone, role, password_hash FROM users WHERE LOWER(username) = ?",
         (username.strip().lower(),)
     )
     user = cursor.fetchone()
     conn.close()
 
-    if user and user["password_hash"] == hash_password(password):
+    if user and user["password_hash"] == hash_password(password.strip()):
         return {
             "authenticated": True,
             "user_id": user["id"],
