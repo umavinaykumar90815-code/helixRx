@@ -2,15 +2,32 @@ import streamlit as st
 import os
 import sys
 import time
+import json
+import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from google import genai
 from datetime import datetime
 from PIL import Image
+
+# Safe GenAI Import to prevent module boot errors
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from engine.db import (
+    init_db,
+    register_user,
+    authenticate_user,
+    save_patient_evaluation,
+    get_patient_history_3_months,
+    save_clinician_evaluation,
+    get_clinician_history_6_months,
+    get_admin_metrics
+)
 from engine.vcf_parser import parse_vcf
 from engine.phenotype_mapper import map_patient_variants
 from engine.cpic_fda_harmonizer import harmonize_guidelines
@@ -21,6 +38,9 @@ from engine.report_parser import parse_medical_report, analyze_prescription_and_
 from engine.dosage_engine import calculate_dosage_adjustment
 from engine.universal_clinical_engine import evaluate_disease_management, generate_meal_titration_instruction
 from utils import generate_pdf_report
+
+# Initialize database schema and pre-seeded accounts
+init_db()
 
 # MUST be the first Streamlit command called in the script
 st.set_page_config(
@@ -95,9 +115,12 @@ st.markdown("""
 # -------------------------------------------------------------
 def call_gemini_with_fallback(client, contents, system_instruction=None):
     """
-    Attempts model generation across lightweight & flagship fallback models,
-    cycling through separate server pools to bypass 503 demand spikes.
+    Attempts model generation across lightweight and standard fallback models,
+    handling high-traffic spikes (503), quota limits (429), or missing models (404).
     """
+    if client is None:
+        return "⚠️ Gemini API client is uninitialized. Configure GEMINI_API_KEY in Streamlit secrets."
+
     candidate_models = [
         "gemini-3.5-flash",
         "gemini-2.5-flash-lite",
@@ -106,9 +129,8 @@ def call_gemini_with_fallback(client, contents, system_instruction=None):
         "gemini-2.5-pro"
     ]
 
-    last_error = None
     for model_name in candidate_models:
-        for attempt in range(2):
+        for _ in range(2):
             try:
                 config = {}
                 if system_instruction:
@@ -120,13 +142,11 @@ def call_gemini_with_fallback(client, contents, system_instruction=None):
                     config=config if config else None
                 )
                 if response and response.text:
-                    return response.text
-            except Exception as e:
-                last_error = e
-                time.sleep(0.3)
+                    return response.text.strip()
+            except Exception:
+                time.sleep(0.4)
                 continue
 
-    # Clean fallback explanation if all API endpoints are temporarily saturated
     return (
         "💡 **Medication Guidelines & Clinical Overview:**\n\n"
         "• Take your morning doses before or with breakfast as prescribed.\n"
@@ -144,25 +164,23 @@ is_village_mode = query_params.get("mode") == "village"
 if "authenticated" not in st.session_state:
     if is_village_mode:
         st.session_state.authenticated = True
+        st.session_state.user_id = 3
         st.session_state.user_role = "Patient"
-        st.session_state.user_name = "Community Patient / Health Camp"
+        st.session_state.user_name = "patient@gmail.com"
+        st.session_state.full_name = "Community Patient (Village Mode)"
     else:
         st.session_state.authenticated = False
+        st.session_state.user_id = None
         st.session_state.user_role = None
         st.session_state.user_name = ""
-
-DOCTOR_LOGINS = {"doctor@helix.org": "doctor123", "admin": "admin123"}
-PATIENT_LOGINS = {"patient@gmail.com": "patient123", "user1": "12345"}
-
-def login(role, username):
-    st.session_state.authenticated = True
-    st.session_state.user_role = role
-    st.session_state.user_name = username
+        st.session_state.full_name = ""
 
 def logout():
     st.session_state.authenticated = False
+    st.session_state.user_id = None
     st.session_state.user_role = None
     st.session_state.user_name = ""
+    st.session_state.full_name = ""
     if "scanned_data" in st.session_state:
         del st.session_state["scanned_data"]
     if "last_patient_batch" in st.session_state:
@@ -209,6 +227,8 @@ def show_ai_assistant_dialog():
             api_key = st.secrets.get("GEMINI_API_KEY", "")
             if not api_key:
                 reply = "⚠️ API Key not configured. Please add `GEMINI_API_KEY` to your Streamlit Cloud Secrets."
+            elif genai is None:
+                reply = "⚠️ `google-genai` library is not loaded."
             else:
                 client = genai.Client(api_key=api_key)
                 reply = call_gemini_with_fallback(client, user_prompt, system_instruction=system_instruction)
@@ -221,46 +241,57 @@ def show_ai_assistant_dialog():
                 st.write(reply)
 
 # =============================================================
-# 1. LOGIN GATEWAY (UNAUTHENTICATED VIEW)
+# 1. LOGIN & REGISTRATION GATEWAY (UNAUTHENTICATED VIEW)
 # =============================================================
 if not st.session_state.authenticated:
     st.markdown('<h1 style="text-align:center;">🧬 Clinical Pharmacogenomics (PGx) Safety Engine</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align:center; color:#9CA3AF;">Precision Decision Support System • Genomics • Organ Clearance • Multi-Disease Protocols</p>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center; color:#9CA3AF;">Multi-Role Precision Architecture • Patient Records • Clinician Decision Support</p>', unsafe_allow_html=True)
 
     _, mid_col, _ = st.columns([1, 1.8, 1])
     with mid_col:
-        with st.container(border=True):
-            login_mode = st.radio("Choose Portal Access Type:", ["👤 Patient / Personal Gateway", "🧑‍⚕️ Clinician & Hospital Gateway"], horizontal=True)
-            st.write("---")
+        auth_tab1, auth_tab2 = st.tabs(["🔐 Sign In to Portal", "📝 Register New Account"])
 
-            if "Patient" in login_mode:
-                st.markdown("#### **Patient Login**")
-                st.caption("Access the Universal Multi-Disease & Medication Assister.")
-                p_id = st.text_input("Patient ID / Email", value="patient@gmail.com")
-                p_pw = st.text_input("Password", type="password", value="patient123")
-                if st.button("Enter Patient Gateway", type="primary", use_container_width=True):
-                    if p_id in PATIENT_LOGINS and PATIENT_LOGINS[p_id] == p_pw:
-                        login("Patient", p_id)
+        with auth_tab1:
+            with st.container(border=True):
+                st.markdown("#### **Account Login**")
+                login_user = st.text_input("Username / Email", value="patient@gmail.com")
+                login_pw = st.text_input("Password", type="password", value="patient123")
+                
+                if st.button("Sign In", type="primary", use_container_width=True):
+                    auth_res = authenticate_user(login_user, login_pw)
+                    if auth_res["authenticated"]:
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = auth_res["user_id"]
+                        st.session_state.user_role = auth_res["role"]
+                        st.session_state.user_name = auth_res["username"]
+                        st.session_state.full_name = auth_res["full_name"]
                         st.rerun()
                     else:
-                        st.error("Invalid credentials. (Demo: `patient@gmail.com` / `patient123`)")
-            else:
-                st.markdown("#### **Clinician & Hospital Login**")
-                st.caption("Access Genomic VCF parsers, CPIC/FDA harmonization, PK curves, and ML predictors.")
-                c_id = st.text_input("Physician ID / Email", value="doctor@helix.org")
-                c_pw = st.text_input("Password", type="password", value="doctor123")
-                if st.button("Authorize Clinician Session", type="primary", use_container_width=True):
-                    if c_id in DOCTOR_LOGINS and DOCTOR_LOGINS[c_id] == c_pw:
-                        login("Clinician", c_id)
-                        st.rerun()
+                        st.error("Invalid credentials. Try: `patient@gmail.com`/`patient123`, `doctor@helix.org`/`doctor123`, or `admin`/`admin123`")
+
+        with auth_tab2:
+            with st.container(border=True):
+                st.markdown("#### **Create New Account**")
+                account_type = st.selectbox("Register as:", ["Patient", "Clinician"])
+                new_name = st.text_input("Full Name", placeholder="e.g., Vinay Kumar")
+                new_phone = st.text_input("Mobile Number", placeholder="e.g., 9876543210")
+                new_email = st.text_input("Email / Username", placeholder="e.g., user@domain.com")
+                new_pw = st.text_input("Password", type="password")
+
+                if st.button("Complete Registration", type="primary", use_container_width=True):
+                    if not new_name or not new_email or not new_pw:
+                        st.warning("Please fill in all required fields.")
                     else:
-                        st.error("Invalid credentials. (Demo: `doctor@helix.org` / `doctor123`)")
+                        reg_res = register_user(new_email, new_name, new_phone, new_pw, role=account_type)
+                        if reg_res["success"]:
+                            st.success(f"Registered successfully as {account_type}! Please sign in using the first tab.")
+                        else:
+                            st.error(reg_res["error"])
 
 # =============================================================
 # 2. AUTHENTICATED PORTALS
 # =============================================================
 else:
-    # Sidebar Header & Profile Branding
     with st.sidebar:
         st.markdown(
             """
@@ -274,12 +305,13 @@ else:
             """,
             unsafe_allow_html=True
         )
-        st.markdown(f"**Logged In:** `{st.session_state.user_name}`")
+        st.markdown(f"**Name:** `{st.session_state.full_name}`")
+        st.markdown(f"**Username:** `{st.session_state.user_name}`")
         st.markdown(f"**Active Portal:** `{st.session_state.user_role}`")
         
         if is_village_mode:
             st.info("🏕️ **Village Camp / QR Direct Mode Active**")
-        
+
         if st.button("🚪 Log Out", use_container_width=True):
             logout()
             
@@ -292,7 +324,7 @@ else:
         st.divider()
 
     # =========================================================
-    # A. PATIENT PORTAL (CAMERA OCR + MULTI-DRUG PILL BOX SCHEDULE)
+    # ROLE A: PATIENT PORTAL (WITH 3-MONTH ARCHIVE)
     # =========================================================
     if st.session_state.user_role == "Patient":
         default_lang_idx = 1 if is_village_mode else 0  # Default to Telugu if opened via village QR
@@ -309,7 +341,7 @@ else:
 
         TRANSLATIONS = {
             "English": {
-                "portal_title": "Universal Multi-Disease & Medication Assister",
+                "portal_title": f"Welcome, {st.session_state.full_name}",
                 "portal_sub": "Verify treatment safety, target ranges, and meal-by-meal dosage adjustments against your latest test reports.",
                 "start_tour_btn": "🎯 Start Interactive Step-by-Step Tour",
                 "stop_tour_btn": "✖ Exit Tour",
@@ -326,7 +358,7 @@ else:
                 "col2_title": "2️⃣ Current Prescribed Medication(s)",
                 "med_label": "Select All Medicines You Take for this Condition:",
                 "egfr_label": "Patient eGFR Metric (mL/min, default: 90)",
-                "eval_btn": "🔍 Evaluate Protocol & Meal-by-Meal Schedule",
+                "eval_btn": "🔍 Evaluate Protocol & Save to Medical History",
                 "results_header": "📊 Evaluation Assessment & Meal Administration Schedule",
                 "safe_badge": "✅ CURRENT DOSE IS OPTIMAL & SAFE",
                 "warn_badge": "⚠️ ADJUSTMENT / TITRATION RECOMMENDED",
@@ -339,7 +371,7 @@ else:
                 "generating": "Generating patient explanation..."
             },
             "Telugu": {
-                "portal_title": "సార్వత్రిక బహుళ-వ్యాధులు & ఔషధ సహాయకం",
+                "portal_title": f"స్వాగతం, {st.session_state.full_name}",
                 "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన భోజన సమయాల మోతాదును ధృవీకరించండి.",
                 "start_tour_btn": "🎯 ఇంటరాక్టివ్ గైడెడ్ టూర్ ప్రారంభించండి",
                 "stop_tour_btn": "✖ టూర్ ముగించు",
@@ -369,7 +401,7 @@ else:
                 "generating": "తెలుగులో వివరణ రూపొందించబడుతోంది..."
             },
             "Hindi": {
-                "portal_title": "सार्वभौमिक बहु-रोग और दवा सहायक",
+                "portal_title": f"नमस्ते, {st.session_state.full_name}",
                 "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और भोजन-वार खुराक समायोजन की जाँच करें।",
                 "start_tour_btn": "🎯 इंटरएक्टिव गाइडेड टूर शुरू करें",
                 "stop_tour_btn": "✖ टूर बंद करें",
@@ -399,7 +431,7 @@ else:
                 "generating": "हिंदी में विवरण तैयार किया जा रहा है..."
             },
             "Swahili (Kiswahili)": {
-                "portal_title": "Msaidizi wa Magonjwa Mengi na Dawa za Kudumu",
+                "portal_title": f"Karibu, {st.session_state.full_name}",
                 "portal_sub": "Thibitisha usalama wa matibabu, vipimo vya afya, na mpango wa kugawa vidonge kulingana na milo.",
                 "start_tour_btn": "🎯 Anza Mwongozo wa Hatua kwa Hatua",
                 "stop_tour_btn": "✖ Toka Kwenye Mwongozo",
@@ -432,7 +464,6 @@ else:
 
         t = TRANSLATIONS[selected_lang]
 
-        # Header Title Banner
         st.markdown(f"""
         <div class="header-banner">
             <h2 style="margin:0;">🏥 {t['portal_title']}</h2>
@@ -440,445 +471,493 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # -------------------------------------------------------------
-        # DUAL-CAMERA SNAP ASSISTANT FOR VILLAGE & COMMUNITY TESTING
-        # -------------------------------------------------------------
-        with st.expander("📸 **Can't read the test numbers or pill names? Snap photos instead!**", expanded=False):
-            st.info("💡 Point your phone camera or upload photos of your **Lab Test Paper** and **Medicine Strip/Box**. HelixRx AI will read the numbers and populate your schedule automatically.")
+        patient_tab1, patient_tab2 = st.tabs([
+            "💊 Today's Medication & Meal Schedule", 
+            "📜 My 3-Month Medical History & Archive"
+        ])
 
-            cam1, cam2 = st.columns(2)
-            with cam1:
-                st.markdown("##### 📄 1. Lab Test Report Photo")
-                report_snap = st.camera_input("Snap lab report", key="cam_report")
-                if not report_snap:
-                    report_snap = st.file_uploader("Or upload report image", type=["png", "jpg", "jpeg"], key="up_report")
+        with patient_tab1:
+            # ---------------------------------------------------------
+            # DUAL-CAMERA SNAP ASSISTANT FOR VILLAGE & COMMUNITY USERS
+            # ---------------------------------------------------------
+            with st.expander("📸 **Can't read the test numbers or pill names? Snap photos instead!**", expanded=False):
+                st.info("💡 Point your phone camera or upload photos of your **Lab Test Paper** and **Medicine Strip/Box**. HelixRx AI will read the numbers and populate your schedule automatically.")
 
-            with cam2:
-                st.markdown("##### 💊 2. Medicine Strip / Box Photo")
-                meds_snap = st.camera_input("Snap tablet strip", key="cam_meds")
-                if not meds_snap:
-                    meds_snap = st.file_uploader("Or upload tablet strip image", type=["png", "jpg", "jpeg"], key="up_meds")
+                cam1, cam2 = st.columns(2)
+                with cam1:
+                    st.markdown("##### 📄 1. Lab Test Report Photo")
+                    report_snap = st.camera_input("Snap lab report", key="cam_report")
+                    if not report_snap:
+                        report_snap = st.file_uploader("Or upload report image", type=["png", "jpg", "jpeg"], key="up_report")
 
-            if report_snap or meds_snap:
-                if st.button("⚡ Scan Photos & Auto-Fill Schedule", type="primary", use_container_width=True):
-                    with st.spinner("Reading lab numbers and tablet packaging..."):
-                        img_report = Image.open(report_snap) if report_snap else None
-                        img_meds = Image.open(meds_snap) if meds_snap else None
-                        api_key = st.secrets.get("GEMINI_API_KEY", "")
+                with cam2:
+                    st.markdown("##### 💊 2. Medicine Strip / Box Photo")
+                    meds_snap = st.camera_input("Snap tablet strip", key="cam_meds")
+                    if not meds_snap:
+                        meds_snap = st.file_uploader("Or upload tablet strip image", type=["png", "jpg", "jpeg"], key="up_meds")
 
-                        parsed = analyze_prescription_and_report_images(img_report, img_meds, api_key)
+                if report_snap or meds_snap:
+                    if st.button("⚡ Scan Photos & Auto-Fill Schedule", type="primary", use_container_width=True):
+                        with st.spinner("Reading lab numbers and tablet packaging..."):
+                            img_report = Image.open(report_snap) if report_snap else None
+                            img_meds = Image.open(meds_snap) if meds_snap else None
+                            api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-                        if "error" in parsed:
-                            st.error(f"Scan issue: {parsed['error']}")
-                        else:
-                            st.session_state["scanned_data"] = parsed
-                            st.success("✅ Prescription & Reports successfully scanned!")
-                            st.rerun()
+                            parsed = analyze_prescription_and_report_images(img_report, img_meds, api_key)
 
-            if "scanned_data" in st.session_state:
-                sd = st.session_state["scanned_data"]
-                st.markdown(f"**Detected Diagnosis:** `{sd.get('detected_condition', 'Diabetes')}`")
-                if sd.get("detected_medicines"):
-                    st.markdown("**Detected Medicines:**")
-                    for m in sd["detected_medicines"]:
-                        st.write(f"• **{m['name']}** — {m.get('strength_mg', '')} mg")
-                if sd.get("doctor_instructions_summary"):
-                    st.caption(f"📝 *Extracted Summary:* {sd['doctor_instructions_summary']}")
-                if st.button("Clear Scanned Data"):
-                    del st.session_state["scanned_data"]
-                    st.rerun()
+                            if "error" in parsed:
+                                st.error(f"Scan issue: {parsed['error']}")
+                            else:
+                                st.session_state["scanned_data"] = parsed
+                                st.success("✅ Prescription & Reports successfully scanned!")
+                                st.rerun()
 
-        # Tour Toggle Button Bar
-        tb_col1, _ = st.columns([2, 1])
-        with tb_col1:
-            if not st.session_state.tutorial_active:
-                if st.button(t["start_tour_btn"], type="primary"):
-                    st.session_state.tutorial_active = True
-                    st.session_state.tutorial_step = 1
-                    st.rerun()
-            else:
-                if st.button(t["stop_tour_btn"]):
-                    st.session_state.tutorial_active = False
-                    st.session_state.tutorial_step = 1
-                    st.rerun()
+                if "scanned_data" in st.session_state:
+                    sd = st.session_state["scanned_data"]
+                    st.markdown(f"**Detected Diagnosis:** `{sd.get('detected_condition', 'Diabetes')}`")
+                    if sd.get("detected_medicines"):
+                        st.markdown("**Detected Medicines:**")
+                        for m in sd["detected_medicines"]:
+                            st.write(f"• **{m['name']}** — {m.get('strength_mg', '')} mg")
+                    if sd.get("doctor_instructions_summary"):
+                        st.caption(f"📝 *Extracted Summary:* {sd['doctor_instructions_summary']}")
+                    if st.button("Clear Scanned Data"):
+                        del st.session_state["scanned_data"]
+                        st.rerun()
 
-        # Step Controller Bar (Shown only during active tour)
-        if st.session_state.tutorial_active:
-            ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([1, 1, 2])
-            with ctrl_c1:
-                if st.button(t["prev_btn"], disabled=(st.session_state.tutorial_step == 1)):
-                    st.session_state.tutorial_step -= 1
-                    st.rerun()
-            with ctrl_c2:
-                if st.session_state.tutorial_step < 5:
-                    if st.button(t["next_btn"], type="primary"):
-                        st.session_state.tutorial_step += 1
+            # Tour Toggle Button Bar
+            tb_col1, _ = st.columns([2, 1])
+            with tb_col1:
+                if not st.session_state.tutorial_active:
+                    if st.button(t["start_tour_btn"], type="primary"):
+                        st.session_state.tutorial_active = True
+                        st.session_state.tutorial_step = 1
                         st.rerun()
                 else:
-                    if st.button(t["finish_tour"], type="primary"):
+                    if st.button(t["stop_tour_btn"]):
                         st.session_state.tutorial_active = False
                         st.session_state.tutorial_step = 1
                         st.rerun()
-            with ctrl_c3:
-                st.info(f"📍 Step {st.session_state.tutorial_step} of 5 Active")
 
-        st.write("---")
-
-        # Resolve Auto-Filled Vitals from Camera Scan (if active)
-        auto_v = st.session_state.get("scanned_data", {}).get("vitals", {})
-        auto_detected_disease = st.session_state.get("scanned_data", {}).get("detected_condition", "Diabetes")
-
-        condition_list = [
-            "Diabetes", "Hypertension", "Thyroid Disorders", 
-            "Hyperlipidemia", "Chronic Kidney Disease", "Asthma / COPD", 
-            "Heart Failure", "Depression / Anxiety", "Gout / Hyperuricemia", 
-            "Atrial Fibrillation", "Rheumatoid Arthritis"
-        ]
-        disease_default_idx = condition_list.index(auto_detected_disease) if auto_detected_disease in condition_list else 0
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader(t["col1_title"])
-
-            # STEP 1 POINTER
-            if st.session_state.tutorial_active and st.session_state.tutorial_step == 1:
-                st.markdown(f'<div class="tutorial-pointer">{t["step1_tip"]}</div>', unsafe_allow_html=True)
-
-            condition = st.selectbox(
-                t["disease_label"],
-                condition_list,
-                index=disease_default_idx,
-                key="pat_disease_sel"
-            )
-
-            # STEP 2 POINTER
-            if st.session_state.tutorial_active and st.session_state.tutorial_step == 2:
-                st.markdown(f'<div class="tutorial-pointer">{t["step2_tip"]}</div>', unsafe_allow_html=True)
-
-            vitals_payload = {}
-            if condition == "Diabetes":
-                fbs_def = int(auto_v["fbs"]) if auto_v.get("fbs") is not None else 145
-                ppbs_def = int(auto_v["ppbs"]) if auto_v.get("ppbs") is not None else 205
-                hba1c_def = float(auto_v["hba1c"]) if auto_v.get("hba1c") is not None else 7.8
-                vitals_payload["fbs"] = st.number_input("Fasting Blood Sugar - FBS (mg/dL)", 0, 500, fbs_def)
-                vitals_payload["ppbs"] = st.number_input("Postprandial Blood Sugar - PPBS (mg/dL)", 0, 600, ppbs_def)
-                vitals_payload["hba1c"] = st.number_input("Glycated Hemoglobin - HbA1c (%)", 3.0, 20.0, hba1c_def, step=0.1)
-                med_options = ["Metformin", "Glimepiride", "Gliclazide", "Insulin"]
-            elif condition == "Hypertension":
-                sbp_def = int(auto_v["systolic_bp"]) if auto_v.get("systolic_bp") is not None else 142
-                dbp_def = int(auto_v["diastolic_bp"]) if auto_v.get("diastolic_bp") is not None else 92
-                vitals_payload["systolic_bp"] = st.number_input("Systolic Blood Pressure (mmHg)", 80, 240, sbp_def)
-                vitals_payload["diastolic_bp"] = st.number_input("Diastolic Blood Pressure (mmHg)", 50, 140, dbp_def)
-                med_options = ["Amlodipine", "Telmisartan", "Lisinopril"]
-            elif condition == "Thyroid Disorders":
-                tsh_def = float(auto_v["tsh"]) if auto_v.get("tsh") is not None else 6.5
-                ft4_def = float(auto_v["free_t4"]) if auto_v.get("free_t4") is not None else 0.75
-                vitals_payload["tsh"] = st.number_input("Thyroid Stimulating Hormone - TSH (mIU/L)", 0.0, 50.0, tsh_def, step=0.1)
-                vitals_payload["free_t4"] = st.number_input("Free T4 (ng/dL)", 0.0, 10.0, ft4_def, step=0.1)
-                med_options = ["Levothyroxine", "Methimazole"]
-            elif condition == "Hyperlipidemia":
-                ldl_def = int(auto_v["ldl_cholesterol"]) if auto_v.get("ldl_cholesterol") is not None else 140
-                tg_def = int(auto_v["triglycerides"]) if auto_v.get("triglycerides") is not None else 210
-                vitals_payload["ldl_cholesterol"] = st.number_input("LDL Cholesterol (mg/dL)", 30, 300, ldl_def)
-                vitals_payload["triglycerides"] = st.number_input("Triglycerides (mg/dL)", 30, 1000, tg_def)
-                med_options = ["Atorvastatin", "Rosuvastatin", "Fenofibrate"]
-            elif condition == "Chronic Kidney Disease":
-                ckd_egfr_def = int(auto_v["egfr"]) if auto_v.get("egfr") is not None else 28
-                vitals_payload["egfr"] = st.number_input("Kidney eGFR (mL/min/1.73m²)", 0, 150, ckd_egfr_def)
-                vitals_payload["uacr"] = st.number_input("Urine Albumin-to-Creatinine Ratio - UACR (mg/g)", 0, 3000, 140)
-                med_options = ["Allopurinol", "Dapagliflozin"]
-            elif condition == "Asthma / COPD":
-                vitals_payload["fev1_percent"] = st.number_input("FEV1 (% Predicted)", 0, 120, 65)
-                vitals_payload["peak_flow"] = st.number_input("Peak Expiratory Flow (L/min)", 0, 800, 260)
-                med_options = ["Salbutamol / Albuterol", "Budenoside"]
-            elif condition == "Heart Failure":
-                vitals_payload["ejection_fraction"] = st.number_input("Left Ventricular Ejection Fraction (%)", 10, 75, 38)
-                vitals_payload["bnp"] = st.number_input("BNP Biomarker (pg/mL)", 0, 5000, 420)
-                med_options = ["Furosemide", "Spironolactone"]
-            elif condition == "Depression / Anxiety":
-                vitals_payload["phq9"] = st.slider("PHQ-9 Depression Severity Score (0-27)", 0, 27, 14)
-                vitals_payload["gad7"] = st.slider("GAD-7 Anxiety Score (0-21)", 0, 21, 10)
-                med_options = ["Sertraline", "Escitalopram", "Venlafaxine"]
-            elif condition == "Gout / Hyperuricemia":
-                uric_def = float(auto_v["uric_acid"]) if auto_v.get("uric_acid") is not None else 8.4
-                vitals_payload["uric_acid"] = st.number_input("Serum Uric Acid (mg/dL)", 2.0, 16.0, uric_def, step=0.1)
-                vitals_payload["flares_per_year"] = st.number_input("Acute Attacks in Last 12 Mos", 0, 20, 3)
-                med_options = ["Allopurinol", "Febuxostat", "Colchicine"]
-            elif condition == "Atrial Fibrillation":
-                inr_def = float(auto_v["inr"]) if auto_v.get("inr") is not None else 1.8
-                vitals_payload["inr"] = st.number_input("International Normalized Ratio (INR)", 0.8, 6.0, inr_def, step=0.1)
-                vitals_payload["cha2ds2_vasc"] = st.slider("CHA2DS2-VASc Stroke Risk Score", 0, 9, 3)
-                med_options = ["Apixaban", "Rivaroxaban", "Warfarin"]
-            else:  # Rheumatoid Arthritis
-                crp_def = float(auto_v["crp"]) if auto_v.get("crp") is not None else 18.5
-                vitals_payload["crp"] = st.number_input("C-Reactive Protein - CRP (mg/L)", 0.0, 100.0, crp_def, step=0.1)
-                vitals_payload["esr"] = st.number_input("Erythrocyte Sedimentation Rate - ESR (mm/hr)", 0, 120, 35)
-                med_options = ["Methotrexate", "Hydroxychloroquine"]
-
-        with col2:
-            st.subheader(t["col2_title"])
-
-            # STEP 3 POINTER
-            if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
-                st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
-
-            auto_detected_meds_list = []
-            auto_strengths = {}
-            if "scanned_data" in st.session_state:
-                for sm in st.session_state["scanned_data"].get("detected_medicines", []):
-                    for opt in med_options:
-                        if opt.lower() in sm.get("name", "").lower() or sm.get("name", "").lower() in opt.lower():
-                            if opt not in auto_detected_meds_list:
-                                auto_detected_meds_list.append(opt)
-                                if sm.get("strength_mg"):
-                                    auto_strengths[opt] = float(sm["strength_mg"])
-
-            default_selection = auto_detected_meds_list if auto_detected_meds_list else ([med_options[0]] if med_options else [])
-            selected_meds = st.multiselect(
-                t["med_label"], 
-                options=med_options, 
-                default=default_selection,
-                key="pat_multi_med_select"
-            )
-            
-            default_map = {
-                "Metformin": 1000.0, "Glimepiride": 2.0, "Gliclazide": 80.0, "Insulin": 20.0,
-                "Amlodipine": 5.0, "Telmisartan": 40.0, "Lisinopril": 10.0,
-                "Levothyroxine": 50.0, "Methimazole": 10.0,
-                "Atorvastatin": 20.0, "Rosuvastatin": 10.0, "Fenofibrate": 145.0,
-                "Allopurinol": 100.0, "Febuxostat": 40.0, "Colchicine": 0.5,
-                "Dapagliflozin": 10.0, "Salbutamol / Albuterol": 100.0, "Budenoside": 200.0,
-                "Furosemide": 40.0, "Spironolactone": 25.0,
-                "Sertraline": 50.0, "Escitalopram": 10.0, "Venlafaxine": 75.0,
-                "Apixaban": 5.0, "Rivaroxaban": 20.0, "Warfarin": 5.0,
-                "Methotrexate": 15.0, "Hydroxychloroquine": 200.0
-            }
-
-            patient_doses = {}
-            if selected_meds:
-                for med in selected_meds:
-                    def_val = auto_strengths.get(med, default_map.get(med, 10.0))
-                    patient_doses[med] = st.number_input(
-                        f"Current Daily Dose for {med} (mg / mcg / Units):",
-                        min_value=0.0,
-                        max_value=3000.0,
-                        value=def_val,
-                        key=f"pat_dose_input_{med}"
-                    )
-            else:
-                st.info("Please select at least one medication from the list above.")
-
-            egfr_default = int(auto_v["egfr"]) if auto_v.get("egfr") is not None else 90
-            patient_egfr_val = st.number_input(t["egfr_label"], 0, 150, egfr_default)
-
-        st.write("---")
-
-        # STEP 4 POINTER
-        if st.session_state.tutorial_active and st.session_state.tutorial_step == 4:
-            st.markdown(f'<div class="tutorial-pointer">{t["step4_tip"]}</div>', unsafe_allow_html=True)
-
-        if st.button(t["eval_btn"], type="primary"):
-            if not selected_meds:
-                st.warning("Please select at least one medication to evaluate.")
-            else:
-                batch_evaluations = []
-                for med in selected_meds:
-                    curr_d = patient_doses.get(med, 0.0)
-                    eval_res = evaluate_disease_management(
-                        condition, med, curr_d, vitals_payload, egfr=patient_egfr_val
-                    )
-                    meal_advice = generate_meal_titration_instruction(
-                        med, curr_d, eval_res["recommended_dose_mg"]
-                    )
-                    eval_res["meal_advice"] = meal_advice
-                    batch_evaluations.append(eval_res)
-
-                st.session_state.last_patient_batch = batch_evaluations
-                st.session_state.last_patient_condition = condition
-
-        # DISPLAY RESULTS WITH VISUAL MEAL PILL BOX CARDS & REMINDERS
-        if "last_patient_batch" in st.session_state:
-            st.subheader(t["results_header"])
-
-            for res in st.session_state.last_patient_batch:
-                med_name = res["drug"]
-                adv = res["meal_advice"]
-
-                with st.container(border=True):
-                    h1, h2 = st.columns([2.5, 1.5])
-                    with h1:
-                        st.markdown(f"### 💊 {med_name}")
-                        st.markdown(f"**{adv['action_text']}**")
-                    with h2:
-                        if res["dose_correct"]:
-                            st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
-                        elif "Renal" in res["status"] or "Contraindicated" in res["status"]:
-                            st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
-
-                    st.markdown("#### 🍱 Daily Visual Pill Box Schedule")
-
-                    b_col, l_col, d_col = st.columns(3)
-
-                    with b_col:
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                            <div style="font-size: 1.1rem; font-weight: 700;">🌅 Morning (Breakfast)</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #fef08a;">{adv.get('morning_dose', '—')}</div>
-                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('morning_timing', 'None')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with l_col:
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                            <div style="font-size: 1.1rem; font-weight: 700;">☀️ Afternoon (Lunch)</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</div>
-                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('afternoon_timing', 'None')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    with d_col:
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #818cf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                            <div style="font-size: 1.1rem; font-weight: 700;">🌙 Night (Dinner)</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #c7d2fe;">{adv.get('night_dose', '—')}</div>
-                            <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('night_timing', 'None')}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                    st.write("")
-                    st.caption(f"💡 **Clinical Administration Rule:** {adv['clinical_note']}")
-                    with st.expander("🩺 View Detailed Lab Metric Rationale"):
-                        for r in res["reasons"]:
-                            st.write(f"• {r}")
+            # Step Controller Bar (Shown only during active tour)
+            if st.session_state.tutorial_active:
+                ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([1, 1, 2])
+                with ctrl_c1:
+                    if st.button(t["prev_btn"], disabled=(st.session_state.tutorial_step == 1)):
+                        st.session_state.tutorial_step -= 1
+                        st.rerun()
+                with ctrl_c2:
+                    if st.session_state.tutorial_step < 5:
+                        if st.button(t["next_btn"], type="primary"):
+                            st.session_state.tutorial_step += 1
+                            st.rerun()
+                    else:
+                        if st.button(t["finish_tour"], type="primary"):
+                            st.session_state.tutorial_active = False
+                            st.session_state.tutorial_step = 1
+                            st.rerun()
+                with ctrl_c3:
+                    st.info(f"📍 Step {st.session_state.tutorial_step} of 5 Active")
 
             st.write("---")
 
-            # ---------------------------------------------------------
-            # 2. POP-UP MEDICATION REMINDER SYSTEM
-            # ---------------------------------------------------------
-            st.markdown("### ⏰ Set Daily Meal Dose Reminders (Pop-Up & Audio)")
-            st.caption("HelixRx can send browser alerts to your phone or laptop at meal times so you never miss a dose.")
+            # Resolve Auto-Filled Vitals from Camera Scan (if active)
+            auto_v = st.session_state.get("scanned_data", {}).get("vitals", {})
+            auto_detected_disease = st.session_state.get("scanned_data", {}).get("detected_condition", "Diabetes")
 
-            rem_col1, rem_col2, rem_col3 = st.columns(3)
-            with rem_col1:
-                b_time = st.time_input("🌅 Breakfast Alert Time", value=datetime.strptime("08:30", "%H:%M").time(), key="time_b")
-            with rem_col2:
-                l_time = st.time_input("☀️ Lunch Alert Time", value=datetime.strptime("13:30", "%H:%M").time(), key="time_l")
-            with rem_col3:
-                d_time = st.time_input("🌙 Dinner Alert Time", value=datetime.strptime("20:30", "%H:%M").time(), key="time_d")
+            condition_list = [
+                "Diabetes", "Hypertension", "Thyroid Disorders", 
+                "Hyperlipidemia", "Chronic Kidney Disease", "Asthma / COPD", 
+                "Heart Failure", "Depression / Anxiety", "Gout / Hyperuricemia", 
+                "Atrial Fibrillation", "Rheumatoid Arthritis"
+            ]
+            disease_default_idx = condition_list.index(auto_detected_disease) if auto_detected_disease in condition_list else 0
 
-            btn_rem1, btn_rem2 = st.columns(2)
-            
-            with btn_rem1:
-                if st.button("🧪 Test Instant Reminder Pop-Up", use_container_width=True):
-                    med_summary_names = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
-                    test_alert_js = f"""
-                    <script>
-                        if ("Notification" in window) {{
-                            Notification.requestPermission().then(permission => {{
-                                if (permission === "granted") {{
-                                    new Notification("🔔 HelixRx Medication Reminder", {{
-                                        body: "Time for your prescribed meal dose: {med_summary_names}. Check your pill box!",
-                                        icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f48a.png"
-                                    }});
-                                }} else {{
-                                    alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
-                                }}
-                            }});
-                        }} else {{
-                            alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
-                        }}
-                    </script>
-                    """
-                    st.components.v1.html(test_alert_js, height=0)
-                    st.success(f"🔔 Test Alert Triggered for: {med_summary_names}!")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader(t["col1_title"])
 
-            with btn_rem2:
-                if st.button("🔔 Activate Daily Browser Reminders", type="primary", use_container_width=True):
-                    med_list_str = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
-                    reminders_active_js = f"""
-                    <script>
-                        if ("Notification" in window) {{
-                            Notification.requestPermission().then(permission => {{
-                                if (permission === "granted") {{
-                                    new Notification("✅ HelixRx Reminders Activated", {{
-                                        body: "Reminders scheduled for Breakfast ({b_time.strftime('%H:%M')}), Lunch ({l_time.strftime('%H:%M')}), and Dinner ({d_time.strftime('%H:%M')}) for {med_list_str}.",
-                                        icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/2705.png"
-                                    }});
-                                }} else {{
-                                    alert("Please allow notification permissions in your browser bar to receive reminders.");
-                                }}
-                            }});
-                        }}
-                    </script>
-                    """
-                    st.components.v1.html(reminders_active_js, height=0)
-                    st.success(f"✅ Daily Reminders active: Breakfast at {b_time.strftime('%H:%M')}, Lunch at {l_time.strftime('%H:%M')}, and Dinner at {d_time.strftime('%H:%M')}.")
+                # STEP 1 POINTER
+                if st.session_state.tutorial_active and st.session_state.tutorial_step == 1:
+                    st.markdown(f'<div class="tutorial-pointer">{t["step1_tip"]}</div>', unsafe_allow_html=True)
 
-            st.info(t["safety_note"])
+                condition = st.selectbox(
+                    t["disease_label"],
+                    condition_list,
+                    index=disease_default_idx,
+                    key="pat_disease_sel"
+                )
 
-            # STEP 5 POINTER
-            if st.session_state.tutorial_active and st.session_state.tutorial_step == 5:
-                st.markdown(f'<div class="tutorial-pointer">{t["step5_tip"]}</div>', unsafe_allow_html=True)
+                # STEP 2 POINTER
+                if st.session_state.tutorial_active and st.session_state.tutorial_step == 2:
+                    st.markdown(f'<div class="tutorial-pointer">{t["step2_tip"]}</div>', unsafe_allow_html=True)
 
-            if st.button(t["explain_btn"]):
-                with st.spinner(t["generating"]):
-                    try:
-                        api_key = st.secrets.get("GEMINI_API_KEY", "")
-                        if api_key:
-                            client = genai.Client(api_key=api_key)
-                            
-                            drugs_summary = []
-                            for r in st.session_state.last_patient_batch:
-                                drugs_summary.append(
-                                    f"- Medication: {r['drug']}, Current: {r['current_dose_mg']}, Recommended: {r['recommended_dose_mg']}\n"
-                                    f"  Meal Plan: {r['meal_advice']['split_plan']}\n"
-                                    f"  Reasons: {' '.join(r['reasons'])}"
-                                )
-                            
-                            explain_prompt = f"""
-                            You are a friendly, compassionate clinical doctor explaining a test evaluation directly to a patient.
-                            Explain this clinical assessment result clearly in {selected_lang}.
-                            Avoid dense medical jargon. Use simple, conversational words.
+                vitals_payload = {}
+                if condition == "Diabetes":
+                    fbs_def = int(auto_v["fbs"]) if auto_v.get("fbs") is not None else 145
+                    ppbs_def = int(auto_v["ppbs"]) if auto_v.get("ppbs") is not None else 205
+                    hba1c_def = float(auto_v["hba1c"]) if auto_v.get("hba1c") is not None else 7.8
+                    vitals_payload["fbs"] = st.number_input("Fasting Blood Sugar - FBS (mg/dL)", 0, 500, fbs_def)
+                    vitals_payload["ppbs"] = st.number_input("Postprandial Blood Sugar - PPBS (mg/dL)", 0, 600, ppbs_def)
+                    vitals_payload["hba1c"] = st.number_input("Glycated Hemoglobin - HbA1c (%)", 3.0, 20.0, hba1c_def, step=0.1)
+                    med_options = ["Metformin", "Glimepiride", "Gliclazide", "Insulin"]
+                elif condition == "Hypertension":
+                    sbp_def = int(auto_v["systolic_bp"]) if auto_v.get("systolic_bp") is not None else 142
+                    dbp_def = int(auto_v["diastolic_bp"]) if auto_v.get("diastolic_bp") is not None else 92
+                    vitals_payload["systolic_bp"] = st.number_input("Systolic Blood Pressure (mmHg)", 80, 240, sbp_def)
+                    vitals_payload["diastolic_bp"] = st.number_input("Diastolic Blood Pressure (mmHg)", 50, 140, dbp_def)
+                    med_options = ["Amlodipine", "Telmisartan", "Lisinopril"]
+                elif condition == "Thyroid Disorders":
+                    tsh_def = float(auto_v["tsh"]) if auto_v.get("tsh") is not None else 6.5
+                    ft4_def = float(auto_v["free_t4"]) if auto_v.get("free_t4") is not None else 0.75
+                    vitals_payload["tsh"] = st.number_input("Thyroid Stimulating Hormone - TSH (mIU/L)", 0.0, 50.0, tsh_def, step=0.1)
+                    vitals_payload["free_t4"] = st.number_input("Free T4 (ng/dL)", 0.0, 10.0, ft4_def, step=0.1)
+                    med_options = ["Levothyroxine", "Methimazole"]
+                elif condition == "Hyperlipidemia":
+                    ldl_def = int(auto_v["ldl_cholesterol"]) if auto_v.get("ldl_cholesterol") is not None else 140
+                    tg_def = int(auto_v["triglycerides"]) if auto_v.get("triglycerides") is not None else 210
+                    vitals_payload["ldl_cholesterol"] = st.number_input("LDL Cholesterol (mg/dL)", 30, 300, ldl_def)
+                    vitals_payload["triglycerides"] = st.number_input("Triglycerides (mg/dL)", 30, 1000, tg_def)
+                    med_options = ["Atorvastatin", "Rosuvastatin", "Fenofibrate"]
+                elif condition == "Chronic Kidney Disease":
+                    ckd_egfr_def = int(auto_v["egfr"]) if auto_v.get("egfr") is not None else 28
+                    vitals_payload["egfr"] = st.number_input("Kidney eGFR (mL/min/1.73m²)", 0, 150, ckd_egfr_def)
+                    vitals_payload["uacr"] = st.number_input("Urine Albumin-to-Creatinine Ratio - UACR (mg/g)", 0, 3000, 140)
+                    med_options = ["Allopurinol", "Dapagliflozin"]
+                elif condition == "Asthma / COPD":
+                    vitals_payload["fev1_percent"] = st.number_input("FEV1 (% Predicted)", 0, 120, 65)
+                    vitals_payload["peak_flow"] = st.number_input("Peak Expiratory Flow (L/min)", 0, 800, 260)
+                    med_options = ["Salbutamol / Albuterol", "Budenoside"]
+                elif condition == "Heart Failure":
+                    vitals_payload["ejection_fraction"] = st.number_input("Left Ventricular Ejection Fraction (%)", 10, 75, 38)
+                    vitals_payload["bnp"] = st.number_input("BNP Biomarker (pg/mL)", 0, 5000, 420)
+                    med_options = ["Furosemide", "Spironolactone"]
+                elif condition == "Depression / Anxiety":
+                    vitals_payload["phq9"] = st.slider("PHQ-9 Depression Severity Score (0-27)", 0, 27, 14)
+                    vitals_payload["gad7"] = st.slider("GAD-7 Anxiety Score (0-21)", 0, 21, 10)
+                    med_options = ["Sertraline", "Escitalopram", "Venlafaxine"]
+                elif condition == "Gout / Hyperuricemia":
+                    uric_def = float(auto_v["uric_acid"]) if auto_v.get("uric_acid") is not None else 8.4
+                    vitals_payload["uric_acid"] = st.number_input("Serum Uric Acid (mg/dL)", 2.0, 16.0, uric_def, step=0.1)
+                    vitals_payload["flares_per_year"] = st.number_input("Acute Attacks in Last 12 Mos", 0, 20, 3)
+                    med_options = ["Allopurinol", "Febuxostat", "Colchicine"]
+                elif condition == "Atrial Fibrillation":
+                    inr_def = float(auto_v["inr"]) if auto_v.get("inr") is not None else 1.8
+                    vitals_payload["inr"] = st.number_input("International Normalized Ratio (INR)", 0.8, 6.0, inr_def, step=0.1)
+                    vitals_payload["cha2ds2_vasc"] = st.slider("CHA2DS2-VASc Stroke Risk Score", 0, 9, 3)
+                    med_options = ["Apixaban", "Rivaroxaban", "Warfarin"]
+                else:  # Rheumatoid Arthritis
+                    crp_def = float(auto_v["crp"]) if auto_v.get("crp") is not None else 18.5
+                    vitals_payload["crp"] = st.number_input("C-Reactive Protein - CRP (mg/L)", 0.0, 100.0, crp_def, step=0.1)
+                    vitals_payload["esr"] = st.number_input("Erythrocyte Sedimentation Rate - ESR (mm/hr)", 0, 120, 35)
+                    med_options = ["Methotrexate", "Hydroxychloroquine"]
 
-                            Details:
-                            - Diagnosis / Condition: {st.session_state.last_patient_condition}
-                            {chr(10).join(drugs_summary)}
+            with col2:
+                st.subheader(t["col2_title"])
 
-                            Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
-                            """
-                            exp_text = call_gemini_with_fallback(client, explain_prompt)
-                            st.success(exp_text)
-                        else:
-                            st.warning("GEMINI_API_KEY not configured for dynamic explanations.")
-                    except Exception as e:
-                        st.error(f"Explanation engine error: {str(e)}")
+                # STEP 3 POINTER
+                if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
+                    st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
+
+                # Auto-match scanned medicines if available
+                auto_detected_meds_list = []
+                auto_strengths = {}
+                if "scanned_data" in st.session_state:
+                    for sm in st.session_state["scanned_data"].get("detected_medicines", []):
+                        for opt in med_options:
+                            if opt.lower() in sm.get("name", "").lower() or sm.get("name", "").lower() in opt.lower():
+                                if opt not in auto_detected_meds_list:
+                                    auto_detected_meds_list.append(opt)
+                                    if sm.get("strength_mg"):
+                                        auto_strengths[opt] = float(sm["strength_mg"])
+
+                default_selection = auto_detected_meds_list if auto_detected_meds_list else ([med_options[0]] if med_options else [])
+                selected_meds = st.multiselect(
+                    t["med_label"], 
+                    options=med_options, 
+                    default=default_selection,
+                    key="pat_multi_med_select"
+                )
+                
+                default_map = {
+                    "Metformin": 1000.0, "Glimepiride": 2.0, "Gliclazide": 80.0, "Insulin": 20.0,
+                    "Amlodipine": 5.0, "Telmisartan": 40.0, "Lisinopril": 10.0,
+                    "Levothyroxine": 50.0, "Methimazole": 10.0,
+                    "Atorvastatin": 20.0, "Rosuvastatin": 10.0, "Fenofibrate": 145.0,
+                    "Allopurinol": 100.0, "Febuxostat": 40.0, "Colchicine": 0.5,
+                    "Dapagliflozin": 10.0, "Salbutamol / Albuterol": 100.0, "Budenoside": 200.0,
+                    "Furosemide": 40.0, "Spironolactone": 25.0,
+                    "Sertraline": 50.0, "Escitalopram": 10.0, "Venlafaxine": 75.0,
+                    "Apixaban": 5.0, "Rivaroxaban": 20.0, "Warfarin": 5.0,
+                    "Methotrexate": 15.0, "Hydroxychloroquine": 200.0
+                }
+
+                patient_doses = {}
+                if selected_meds:
+                    for med in selected_meds:
+                        def_val = auto_strengths.get(med, default_map.get(med, 10.0))
+                        patient_doses[med] = st.number_input(
+                            f"Current Daily Dose for {med} (mg / mcg / Units):",
+                            min_value=0.0,
+                            max_value=3000.0,
+                            value=def_val,
+                            key=f"pat_dose_input_{med}"
+                        )
+                else:
+                    st.info("Please select at least one medication from the list above.")
+
+                egfr_default = int(auto_v["egfr"]) if auto_v.get("egfr") is not None else 90
+                patient_egfr_val = st.number_input(t["egfr_label"], 0, 150, egfr_default)
+
+            st.write("---")
+
+            # STEP 4 POINTER
+            if st.session_state.tutorial_active and st.session_state.tutorial_step == 4:
+                st.markdown(f'<div class="tutorial-pointer">{t["step4_tip"]}</div>', unsafe_allow_html=True)
+
+            if st.button(t["eval_btn"], type="primary"):
+                if not selected_meds:
+                    st.warning("Please select at least one medication to evaluate.")
+                else:
+                    batch_evaluations = []
+                    for med in selected_meds:
+                        curr_d = patient_doses.get(med, 0.0)
+                        eval_res = evaluate_disease_management(
+                            condition, med, curr_d, vitals_payload, egfr=patient_egfr_val
+                        )
+                        meal_advice = generate_meal_titration_instruction(
+                            med, curr_d, eval_res["recommended_dose_mg"]
+                        )
+                        eval_res["meal_advice"] = meal_advice
+                        batch_evaluations.append(eval_res)
+
+                    st.session_state.last_patient_batch = batch_evaluations
+                    st.session_state.last_patient_condition = condition
+
+                    # Save record into user's database archive
+                    if st.session_state.user_id:
+                        rec_id = save_patient_evaluation(
+                            user_id=st.session_state.user_id,
+                            condition=condition,
+                            vitals=vitals_payload,
+                            batch_evaluations=batch_evaluations,
+                            scanned=("scanned_data" in st.session_state)
+                        )
+                        st.toast(f"💾 Screening saved to Medical History (Record #{rec_id})")
+
+            # DISPLAY RESULTS WITH VISUAL MEAL PILL BOX CARDS & REMINDERS
+            if "last_patient_batch" in st.session_state:
+                st.subheader(t["results_header"])
+
+                # 1. VISUAL "MEAL PILL BOX" CARDS
+                for res in st.session_state.last_patient_batch:
+                    med_name = res["drug"]
+                    adv = res["meal_advice"]
+
+                    with st.container(border=True):
+                        h1, h2 = st.columns([2.5, 1.5])
+                        with h1:
+                            st.markdown(f"### 💊 {med_name}")
+                            st.markdown(f"**{adv['action_text']}**")
+                        with h2:
+                            if res["dose_correct"]:
+                                st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
+                            elif "Renal" in res["status"] or "Contraindicated" in res["status"]:
+                                st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
+
+                        st.markdown("#### 🍱 Daily Visual Pill Box Schedule")
+
+                        # 3 Styled Meal Columns
+                        b_col, l_col, d_col = st.columns(3)
+
+                        # Morning Card
+                        with b_col:
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                                <div style="font-size: 1.1rem; font-weight: 700;">🌅 Morning (Breakfast)</div>
+                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #fef08a;">{adv.get('morning_dose', '—')}</div>
+                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('morning_timing', 'None')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        # Afternoon Card
+                        with l_col:
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                                <div style="font-size: 1.1rem; font-weight: 700;">☀️ Afternoon (Lunch)</div>
+                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</div>
+                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('afternoon_timing', 'None')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        # Night Card
+                        with d_col:
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #818cf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                                <div style="font-size: 1.1rem; font-weight: 700;">🌙 Night (Dinner)</div>
+                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #c7d2fe;">{adv.get('night_dose', '—')}</div>
+                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('night_timing', 'None')}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        st.write("")
+                        st.caption(f"💡 **Clinical Administration Rule:** {adv['clinical_note']}")
+                        with st.expander("🩺 View Detailed Lab Metric Rationale"):
+                            for r in res["reasons"]:
+                                st.write(f"• {r}")
+
+                st.write("---")
+
+                # 2. POP-UP MEDICATION REMINDER SYSTEM
+                st.markdown("### ⏰ Set Daily Meal Dose Reminders (Pop-Up & Audio)")
+                st.caption("HelixRx can send browser alerts to your phone or laptop at meal times so you never miss a dose.")
+
+                rem_col1, rem_col2, rem_col3 = st.columns(3)
+                with rem_col1:
+                    b_time = st.time_input("🌅 Breakfast Alert Time", value=datetime.strptime("08:30", "%H:%M").time(), key="time_b")
+                with rem_col2:
+                    l_time = st.time_input("☀️ Lunch Alert Time", value=datetime.strptime("13:30", "%H:%M").time(), key="time_l")
+                with rem_col3:
+                    d_time = st.time_input("🌙 Dinner Alert Time", value=datetime.strptime("20:30", "%H:%M").time(), key="time_d")
+
+                btn_rem1, btn_rem2 = st.columns(2)
+                
+                with btn_rem1:
+                    if st.button("🧪 Test Instant Reminder Pop-Up", use_container_width=True):
+                        med_summary_names = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
+                        test_alert_js = f"""
+                        <script>
+                            if ("Notification" in window) {{
+                                Notification.requestPermission().then(permission => {{
+                                    if (permission === "granted") {{
+                                        new Notification("🔔 HelixRx Medication Reminder", {{
+                                            body: "Time for your prescribed meal dose: {med_summary_names}. Check your pill box!",
+                                            icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f48a.png"
+                                        }});
+                                    }} else {{
+                                        alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
+                                    }}
+                                }});
+                            }} else {{
+                                alert("🔔 HelixRx Reminder: Time to take your medication ({med_summary_names}) with your meal!");
+                            }}
+                        </script>
+                        """
+                        st.components.v1.html(test_alert_js, height=0)
+                        st.success(f"🔔 Test Alert Triggered for: {med_summary_names}!")
+
+                with btn_rem2:
+                    if st.button("🔔 Activate Daily Browser Reminders", type="primary", use_container_width=True):
+                        med_list_str = ", ".join([r["drug"] for r in st.session_state.last_patient_batch])
+                        reminders_active_js = f"""
+                        <script>
+                            if ("Notification" in window) {{
+                                Notification.requestPermission().then(permission => {{
+                                    if (permission === "granted") {{
+                                        new Notification("✅ HelixRx Reminders Activated", {{
+                                            body: "Reminders scheduled for Breakfast ({b_time.strftime('%H:%M')}), Lunch ({l_time.strftime('%H:%M')}), and Dinner ({d_time.strftime('%H:%M')}) for {med_list_str}.",
+                                            icon: "https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/2705.png"
+                                        }});
+                                    }} else {{
+                                        alert("Please allow notification permissions in your browser bar to receive reminders.");
+                                    }}
+                                }});
+                            }}
+                        </script>
+                        """
+                        st.components.v1.html(reminders_active_js, height=0)
+                        st.success(f"✅ Daily Reminders active: Breakfast at {b_time.strftime('%H:%M')}, Lunch at {l_time.strftime('%H:%M')}, and Dinner at {d_time.strftime('%H:%M')}.")
+
+                st.info(t["safety_note"])
+
+                # STEP 5 POINTER
+                if st.session_state.tutorial_active and st.session_state.tutorial_step == 5:
+                    st.markdown(f'<div class="tutorial-pointer">{t["step5_tip"]}</div>', unsafe_allow_html=True)
+
+                if st.button(t["explain_btn"]):
+                    with st.spinner(t["generating"]):
+                        try:
+                            api_key = st.secrets.get("GEMINI_API_KEY", "")
+                            if api_key and genai is not None:
+                                client = genai.Client(api_key=api_key)
+                                
+                                drugs_summary = []
+                                for r in st.session_state.last_patient_batch:
+                                    drugs_summary.append(
+                                        f"- Medication: {r['drug']}, Current: {r['current_dose_mg']}, Recommended: {r['recommended_dose_mg']}\n"
+                                        f"  Meal Plan: {r['meal_advice']['split_plan']}\n"
+                                        f"  Reasons: {' '.join(r['reasons'])}"
+                                    )
+                                
+                                explain_prompt = f"""
+                                You are a friendly, compassionate clinical doctor explaining a test evaluation directly to a patient.
+                                Explain this clinical assessment result clearly in {selected_lang}.
+                                Avoid dense medical jargon. Use simple, conversational words.
+
+                                Details:
+                                - Diagnosis / Condition: {st.session_state.last_patient_condition}
+                                {chr(10).join(drugs_summary)}
+
+                                Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
+                                """
+                                exp_text = call_gemini_with_fallback(client, explain_prompt)
+                                st.success(exp_text)
+                            else:
+                                st.warning("GEMINI_API_KEY not configured for dynamic explanations.")
+                        except Exception as e:
+                            st.error(f"Explanation engine error: {str(e)}")
+
+        # -----------------------------------------------------
+        # 3-MONTH MEDICAL HISTORY TAB
+        # -----------------------------------------------------
+        with patient_tab2:
+            st.subheader("📜 Past 3 Months Medical Records & Pill History")
+            st.caption("All evaluations and tests conducted for your account in the last 90 days.")
+
+            if st.session_state.user_id:
+                history_records = get_patient_history_3_months(st.session_state.user_id)
+                if not history_records:
+                    st.info("No medical evaluations found in the past 3 months. When you run an evaluation on Tab 1, it will automatically save and appear here.")
+                else:
+                    for rec in history_records:
+                        with st.expander(f"🗓️ Visit: {rec['timestamp']} — {rec['condition']} ({rec['clinical_status']})", expanded=False):
+                            badge = "🟢 Safe" if rec["clinical_status"] == "Optimal" else "🔴 Warning / Adjustment Needed"
+                            st.markdown(f"**Overall Status:** {badge} | **Method:** {'📸 Photo Scanned' if rec['scanned'] else '⌨️ Manually Entered'}")
+                            st.markdown("##### 🩺 Test Biomarkers Recorded:")
+                            st.json(rec["vitals"])
+                            st.markdown("##### 💊 Prescribed Medications & Meal Schedules on this Date:")
+                            for med_eval in rec["medications"]:
+                                st.write(f"• **{med_eval.get('drug')}**: Current {med_eval.get('current_dose_mg')} mg ➔ Target: {med_eval.get('recommended_dose_mg')} mg")
+                                adv = med_eval.get("meal_advice", {})
+                                if adv:
+                                    st.caption(f"  - Morning: {adv.get('morning_dose')} | Afternoon: {adv.get('afternoon_dose')} | Night: {adv.get('night_dose')}")
 
     # =========================================================
-    # B. CLINICIAN & HOSPITAL GATEWAY (GENOMICS & PK MODELING)
+    # ROLE B: CLINICIAN PORTAL (WITH 6-MONTH AUDIT ARCHIVE)
     # =========================================================
-    else:
-        st.markdown("""
+    elif st.session_state.user_role == "Clinician":
+        st.markdown(f"""
         <div class="header-banner" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);">
-            <h2 style="margin:0;">🧑‍⚕️ Clinical Pharmacogenomics (PGx) Safety Engine</h2>
+            <h2 style="margin:0;">🧑‍⚕️ Clinician Decision Portal | Dr. {st.session_state.full_name}</h2>
             <p style="margin:5px 0 0 0; opacity:0.8;">VCF Genomic Parser • CPIC/FDA Harmonization • Organ Clearance Filters • Pharmacokinetics</p>
         </div>
         """, unsafe_allow_html=True)
 
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📊 Patient PGx & Polypharmacy", 
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 Active Patient Prescribing", 
             "🤖 ML Novel Variant Predictor", 
             "📈 Dynamic PK Concentration Curves", 
-            "📑 Clinical Audit & EHR Summary"
+            "📑 Clinical Summary & EHR",
+            "🗂️ 6-Month Clinical Decision Archive"
         ])
 
         ml_predictor = VariantImpactPredictor()
 
         with st.sidebar:
             st.header("📥 Diagnostic & Genomic Ingestion")
+            pt_id_str = st.text_input("Patient Identifier / MRN:", value="PT-1082", key="c_pt_id")
             report_file = st.file_uploader("Upload Lab Report (PDF / TXT)", type=["pdf", "txt"], key="c_pdf_up")
 
             parsed_egfr, parsed_alt = 90.0, 25.0
@@ -925,6 +1004,7 @@ else:
                 f.write(uploaded_vcf.getbuffer())
             raw_variants = parse_vcf(vcf_path)
             phenotypes = map_patient_variants(raw_variants)
+            vcf_label = uploaded_vcf.name
             st.sidebar.success(f"Loaded VCF: {uploaded_vcf.name}")
         else:
             phenotypes = [
@@ -933,18 +1013,23 @@ else:
                 {"gene": "HLAB", "phenotype": "Normal Metabolizer"},
                 {"gene": "SLCO1B1", "phenotype": "Normal Metabolizer"}
             ]
+            vcf_label = "Population Baseline VCF"
 
         with tab1:
             st.subheader("📋 Precision Prescribing Evaluations")
             if not selected_drugs:
                 st.info("Select one or more active prescriptions from the sidebar.")
             else:
+                max_risk_level = "Low Risk"
                 for idx, drug in enumerate(selected_drugs):
                     harmonized = harmonize_guidelines(drug, phenotypes)
                     for h_idx, item in enumerate(harmonized):
                         organ_eval = evaluate_organ_clearance(egfr, alt, item['risk_level'], drug)
                         final_risk = organ_eval['final_risk_level']
                         dose_eval = calculate_dosage_adjustment(drug, egfr, alt, standard_dose_mg=100.0)
+
+                        if "High" in final_risk or "Toxic" in final_risk:
+                            max_risk_level = "High Risk"
 
                         badge_html = '<span class="badge-green">🟢 SAFE TO PRESCRIBE</span>'
                         if final_risk in ["High Risk", "Toxic Risk"]:
@@ -987,6 +1072,18 @@ else:
                                     mime="application/pdf",
                                     key=f"dl_btn_{idx}_{drug}_{h_idx}"
                                 )
+
+                if st.button("💾 Finalize & Log Clinical Session to 6-Month Archive", type="primary"):
+                    rec_id = save_clinician_evaluation(
+                        clinician_id=st.session_state.user_id,
+                        patient_id=pt_id_str,
+                        drugs=selected_drugs,
+                        egfr=egfr,
+                        alt=alt,
+                        vcf=vcf_label,
+                        risk_summary=max_risk_level
+                    )
+                    st.success(f"Prescription session logged to 6-Month Audit Archive (ID #{rec_id})")
 
                 if len(selected_drugs) > 1:
                     st.divider()
@@ -1055,12 +1152,14 @@ else:
 CLINICAL PHARMACOGENOMICS DECISION SUPPORT RECORD
 Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 ======================================================================
-PATIENT ORGAN VITALS:
+CLINICIAN: Dr. {st.session_state.full_name}
+PATIENT IDENTIFIER: {pt_id_str}
+ORGAN VITALS:
 - eGFR: {egfr} mL/min/1.73m2 (Status: {'Adequate' if egfr >= 60 else 'Impaired'})
 - ALT:  {alt} U/L (Status: {'Normal' if alt <= 40 else 'Elevated'})
 
 GENOMIC PROFILE:
-- VCF File: {'Uploaded Genomic Sequence' if uploaded_vcf else 'Population Wild-Type Baseline'}
+- VCF Source: {vcf_label}
 
 PRESCRIBED MEDICATIONS EVALUATED:
 {', '.join(selected_drugs) if selected_drugs else 'None selected'}
@@ -1073,6 +1172,89 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
             st.download_button(
                 "📥 Download Official Clinical Audit Trail",
                 data=summary_text,
-                file_name="Clinical_PGx_Record.txt",
+                file_name=f"Clinical_PGx_Record_{pt_id_str}.txt",
                 mime="text/plain"
             )
+
+        with tab5:
+            st.subheader("🗂️ 6-Month Clinical Decision Archive")
+            st.caption("All precision genomic evaluations and drug adjustments logged by your account in the past 180 days.")
+            c_history = get_clinician_history_6_months(st.session_state.user_id)
+            if c_history:
+                df_c = pd.DataFrame(c_history)
+                st.dataframe(df_c, use_container_width=True)
+            else:
+                st.info("No clinical sessions logged in the last 6 months.")
+
+    # =========================================================
+    # ROLE C: SYSTEM ADMINISTRATOR PORTAL (FULL AUDIT & USAGE)
+    # =========================================================
+    else:  # Admin
+        st.markdown("""
+        <div class="header-banner" style="background: linear-gradient(135deg, #111827 0%, #374151 100%);">
+            <h2 style="margin:0;">🛡️ System Administrator Master Command Center</h2>
+            <p style="margin:5px 0 0 0; opacity:0.8;">Platform Usage Metrics • Full User Credentials • 3-Month Patient & 6-Month Clinical Records</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        metrics = get_admin_metrics()
+
+        # Platform KPIs
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Total Registered Users", metrics["total_users"])
+        k2.metric("Active Patients", metrics["total_patients"])
+        k3.metric("Licensed Clinicians", metrics["total_clinicians"])
+        k4.metric("Total Clinical Evaluations", metrics["total_evaluations"])
+
+        st.divider()
+
+        adm_tab1, adm_tab2, adm_tab3 = st.tabs([
+            "👥 Registered Users & Credentials Audit", 
+            "📜 Patient Screenings History", 
+            "🧑‍⚕️ Clinician Prescribing History"
+        ])
+
+        with adm_tab1:
+            st.subheader("Registered Users Directory")
+            df_users = pd.DataFrame(metrics["users"])
+            st.dataframe(df_users, use_container_width=True)
+
+            csv_users = df_users.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "📥 Export Registered Users Directory (CSV)",
+                data=csv_users,
+                file_name=f"HelixRx_Users_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+
+        with adm_tab2:
+            st.subheader("Complete Patient Screenings Audit")
+            if metrics["patient_records"]:
+                df_pts = pd.DataFrame(metrics["patient_records"])
+                st.dataframe(df_pts, use_container_width=True)
+
+                csv_pts = df_pts.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Export Full Patient Clinical Logs (CSV)",
+                    data=csv_pts,
+                    file_name=f"HelixRx_Patient_Logs_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("No patient screening logs recorded yet.")
+
+        with adm_tab3:
+            st.subheader("Complete Clinician PGx Evaluations Audit")
+            if metrics["clinician_records"]:
+                df_clins = pd.DataFrame(metrics["clinician_records"])
+                st.dataframe(df_clins, use_container_width=True)
+
+                csv_clins = df_clins.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Export Full Clinician PGx Logs (CSV)",
+                    data=csv_clins,
+                    file_name=f"HelixRx_Clinician_Logs_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("No clinician audit logs recorded yet.")
