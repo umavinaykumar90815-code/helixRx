@@ -26,7 +26,7 @@ def get_db_connection():
 
 
 def init_db():
-    """Initializes tables for accounts, patient sessions, and clinician sessions."""
+    """Initializes tables and updates the admin account details."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -74,20 +74,52 @@ def init_db():
         )
     """)
 
-    # Pre-seed Default Baseline Credentials
-    cursor.execute("SELECT COUNT(*) FROM users")
-    if cursor.fetchone()[0] == 0:
+    # =========================================================
+    # YOUR CONFIGURED ADMIN CREDENTIALS
+    # =========================================================
+    NEW_ADMIN_USER = "umavinaykumar90815@gmail.com"
+    NEW_ADMIN_NAME = "Vinay"
+    NEW_ADMIN_PHONE = "7981718577"
+    NEW_ADMIN_PASS = "admin123"  # Change this to whatever password you prefer
+    # =========================================================
+
+    # Remove any existing conflicting record using this email so it becomes the pure Admin
+    cursor.execute("DELETE FROM users WHERE username = ? AND role != 'Admin'", (NEW_ADMIN_USER.strip().lower(),))
+
+    # Check if an admin role exists
+    cursor.execute("SELECT id FROM users WHERE role = 'Admin'")
+    existing_admin = cursor.fetchone()
+
+    if existing_admin:
+        cursor.execute("""
+            UPDATE users 
+            SET username = ?, full_name = ?, phone = ?, password_hash = ?
+            WHERE role = 'Admin'
+        """, (
+            NEW_ADMIN_USER.strip().lower(),
+            NEW_ADMIN_NAME.strip(),
+            NEW_ADMIN_PHONE.strip(),
+            hash_password(NEW_ADMIN_PASS)
+        ))
+    else:
         cursor.execute(
             "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
-            ("admin", "System Administrator", "9999999999", hash_password("admin123"), "Admin")
+            (NEW_ADMIN_USER.strip().lower(), NEW_ADMIN_NAME.strip(), NEW_ADMIN_PHONE.strip(), hash_password(NEW_ADMIN_PASS), "Admin")
         )
+
+    # Pre-seed default demo accounts if missing
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Clinician'")
+    if cursor.fetchone()[0] == 0:
         cursor.execute(
             "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
             ("doctor@helix.org", "Dr. Rajesh Rao (MD)", "9123456780", hash_password("doctor123"), "Clinician")
         )
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Patient'")
+    if cursor.fetchone()[0] == 0:
         cursor.execute(
             "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
-            ("patient@gmail.com", "Vinay Kumar", "9876543210", hash_password("patient123"), "Patient")
+            ("patient@gmail.com", "Demo Patient", "9876543210", hash_password("patient123"), "Patient")
         )
 
     conn.commit()
