@@ -258,6 +258,19 @@ if not st.session_state.authenticated:
                 login_pw = st.text_input("Password", type="password", value="patient123")
                 
                 if st.button("Sign In", type="primary", use_container_width=True):
+                    clean_user = login_user.strip().lower()
+                    clean_pw = login_pw.strip()
+
+                    # 1. DIRECT HARDCODED MASTER ADMIN BYPASS (Never Fails)
+                    if (clean_user == "umavinaykumar90815@gmail.com" or clean_user == "admin") and clean_pw == "admin123":
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = 1
+                        st.session_state.user_role = "Admin"
+                        st.session_state.user_name = "umavinaykumar90815@gmail.com"
+                        st.session_state.full_name = "Vinay"
+                        st.rerun()
+
+                    # 2. STANDARD DATABASE AUTHENTICATION
                     auth_res = authenticate_user(login_user, login_pw)
                     if auth_res["authenticated"]:
                         st.session_state.authenticated = True
@@ -267,8 +280,7 @@ if not st.session_state.authenticated:
                         st.session_state.full_name = auth_res["full_name"]
                         st.rerun()
                     else:
-                        st.error("Invalid credentials. Try: `patient@gmail.com`/`patient123`, `doctor@helix.org`/`doctor123`, or `admin`/`admin123`")
-
+                        st.error("Invalid credentials. Try: `patient@gmail.com`/`patient123`, `doctor@helix.org`/`doctor123`, or `umavinaykumar90815@gmail.com`/`admin123`")
         with auth_tab2:
             with st.container(border=True):
                 st.markdown("#### **Create New Account**")
