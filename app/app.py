@@ -1215,7 +1215,7 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
         ])
 
         with adm_tab1:
-            st.subheader("Registered Users Directory")
+            st.subheader("Registered Users Overview")
             df_users = pd.DataFrame(metrics["users"])
             st.dataframe(df_users, use_container_width=True)
 
@@ -1226,6 +1226,94 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
                 file_name=f"HelixRx_Users_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
+
+            st.write("---")
+            st.subheader("🔍 User Deep-Dive & Clinical History Inspector")
+            st.caption("Select any registered user below to view their profile, past visits, test biomarkers, and complete medication plans.")
+
+            # Create selector list with name, username, and role
+            user_options = {
+                f"{u['full_name']} ({u['username']}) - [{u['role']}]": u
+                for u in metrics["users"]
+            }
+
+            selected_user_label = st.selectbox(
+                "Select User to Inspect:",
+                options=list(user_options.keys()),
+                key="admin_user_inspect_select"
+            )
+
+            if selected_user_label:
+                target_user = user_options[selected_user_label]
+                t_uid = target_user["id"]
+                t_role = target_user["role"]
+
+                # User Header Card
+                with st.container(border=True):
+                    uc1, uc2, uc3 = st.columns(3)
+                    uc1.markdown(f"**👤 Full Name:** `{target_user['full_name']}`")
+                    uc1.markdown(f"**📧 Username / Email:** `{target_user['username']}`")
+                    uc2.markdown(f"**📱 Phone Number:** `{target_user['phone'] or 'N/A'}`")
+                    uc2.markdown(f"**🏷️ Role:** `{target_user['role']}`")
+                    uc3.markdown(f"**🗓️ Registered Since:** `{target_user['created_at']}`")
+                    uc3.markdown(f"**🆔 Database ID:** `#{t_uid}`")
+
+                st.write("")
+
+                # 1. IF PATIENT: DISPLAY ALL MEDICAL VISITS & PRESCRIBED MEAL SCHEDULES
+                if t_role == "Patient":
+                    p_records = get_patient_history_3_months(t_uid)
+                    st.markdown(f"#### 🩺 Medical Evaluation History for {target_user['full_name']} ({len(p_records)} Records)")
+
+                    if not p_records:
+                        st.info(f"No clinical evaluation records logged for {target_user['full_name']} yet.")
+                    else:
+                        for idx, p_rec in enumerate(p_records):
+                            badge_color = "🟢" if p_rec["clinical_status"] == "Optimal" else "🔴"
+                            exp_title = f"{badge_color} Visit #{p_rec['id']} • {p_rec['timestamp']} — {p_rec['condition']} ({p_rec['clinical_status']})"
+                            
+                            with st.expander(exp_title, expanded=(idx == 0)):
+                                r_c1, r_c2 = st.columns([1.2, 2])
+                                
+                                with r_c1:
+                                    st.markdown("##### 🧪 Lab Test Biomarkers")
+                                    v = p_rec.get("vitals", {})
+                                    if v:
+                                        for k, val in v.items():
+                                            st.write(f"• **{k.upper().replace('_', ' ')}**: `{val}`")
+                                    else:
+                                        st.caption("No biomarkers entered.")
+                                    st.caption(f"Entry mode: {'📸 Scanned via camera' if p_rec['scanned'] else '⌨️ Manual entry'}")
+
+                                with r_c2:
+                                    st.markdown("##### 💊 Prescribed Medications & Pill Box Plans")
+                                    meds = p_rec.get("medications", [])
+                                    if meds:
+                                        for m in meds:
+                                            with st.container(border=True):
+                                                st.markdown(f"**{m.get('drug')}** — Current: `{m.get('current_dose_mg')} mg` ➔ Recommended: `{m.get('recommended_dose_mg')} mg`")
+                                                adv = m.get("meal_advice", {})
+                                                if adv:
+                                                    st.caption(f"• 🌅 **Morning:** {adv.get('morning_dose', '—')} ({adv.get('morning_timing', '')})")
+                                                    st.caption(f"• ☀️ **Afternoon:** {adv.get('afternoon_dose', '—')} ({adv.get('afternoon_timing', '')})")
+                                                    st.caption(f"• 🌙 **Night:** {adv.get('night_dose', '—')} ({adv.get('night_timing', '')})")
+                                    else:
+                                        st.caption("No medication records saved for this visit.")
+
+                # 2. IF CLINICIAN: DISPLAY CLINICAL SESSIONS & PGX AUDITS
+                elif t_role == "Clinician":
+                    c_records = get_clinician_history_6_months(t_uid)
+                    st.markdown(f"#### 🧑‍⚕️ Clinical Prescribing Sessions by Dr. {target_user['full_name']} ({len(c_records)} Records)")
+
+                    if not c_records:
+                        st.info(f"No clinical decision sessions recorded by Dr. {target_user['full_name']} yet.")
+                    else:
+                        df_c_records = pd.DataFrame(c_records)
+                        st.dataframe(df_c_records, use_container_width=True)
+
+                # 3. IF ADMIN
+                else:
+                    st.info("System Administrator root account. Manages all databases and server permissions.")
 
         with adm_tab2:
             st.subheader("Complete Patient Screenings Audit")
