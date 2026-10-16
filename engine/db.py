@@ -80,16 +80,13 @@ def init_db():
     ADMIN_PHONE = "7981718577"
     ADMIN_PASS = "admin123"
 
-    # Wipe any old instances of this username or old generic admin accounts to prevent conflict
     cursor.execute("DELETE FROM users WHERE LOWER(username) = ? OR LOWER(username) = 'admin' OR role = 'Admin'", (ADMIN_USER.lower(),))
 
-    # Insert clean Admin user
     cursor.execute(
         "INSERT INTO users (username, full_name, phone, password_hash, role) VALUES (?, ?, ?, ?, ?)",
         (ADMIN_USER.lower(), ADMIN_NAME, ADMIN_PHONE, hash_password(ADMIN_PASS), "Admin")
     )
 
-    # Seed baseline demo accounts if missing
     cursor.execute("SELECT COUNT(*) FROM users WHERE role = 'Clinician'")
     if cursor.fetchone()[0] == 0:
         cursor.execute(
@@ -109,7 +106,6 @@ def init_db():
 
 
 def register_user(username: str, full_name: str, phone: str, password: str, role: str = "Patient") -> dict:
-    """Registers a new patient or clinician account."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -130,7 +126,6 @@ def register_user(username: str, full_name: str, phone: str, password: str, role
 
 
 def authenticate_user(username: str, password: str) -> dict:
-    """Validates login credentials against stored hashes."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -152,11 +147,7 @@ def authenticate_user(username: str, password: str) -> dict:
     return {"authenticated": False}
 
 
-# -------------------------------------------------------------
-# PROFILE EDIT & PASSWORD RESET HELPERS
-# -------------------------------------------------------------
 def reset_password_with_phone(username: str, phone: str, new_password: str) -> dict:
-    """Allows resetting password by verifying registered username and phone number."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -178,7 +169,6 @@ def reset_password_with_phone(username: str, phone: str, new_password: str) -> d
 
 
 def update_user_password(user_id: int, current_password: str, new_password: str) -> dict:
-    """Changes password from within user settings by verifying current password."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
@@ -197,7 +187,6 @@ def update_user_password(user_id: int, current_password: str, new_password: str)
 
 
 def update_user_profile(user_id: int, full_name: str, phone: str) -> dict:
-    """Updates user full name and phone contact details."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -213,9 +202,6 @@ def update_user_profile(user_id: int, full_name: str, phone: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-# -------------------------------------------------------------
-# PATIENT DATA HELPERS (3 MONTHS)
-# -------------------------------------------------------------
 def save_patient_evaluation(user_id: int, condition: str, vitals: dict, batch_evaluations: list, scanned: bool = False) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -275,9 +261,6 @@ def get_patient_history_3_months(user_id: int) -> list:
     return history
 
 
-# -------------------------------------------------------------
-# CLINICIAN DATA HELPERS (6 MONTHS)
-# -------------------------------------------------------------
 def save_clinician_evaluation(clinician_id: int, patient_id: str, drugs: list, egfr: float, alt: float, vcf: str, risk_summary: str) -> int:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -318,9 +301,6 @@ def get_clinician_history_6_months(clinician_id: int) -> list:
     return rows
 
 
-# -------------------------------------------------------------
-# ADMIN AUDIT & USAGE ANALYTICS HELPERS
-# -------------------------------------------------------------
 def get_admin_metrics() -> dict:
     conn = get_db_connection()
     cursor = conn.cursor()
