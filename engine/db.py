@@ -1,7 +1,7 @@
 """
 HelixRx Multi-Role Clinical & Patient Database Engine
 Handles user authentication, role-based historical partitions (3-month for patients, 
-6-month for clinicians), and comprehensive administrator audit analytics.
+6-month for clinicians), administrator audits, profile updates, and password resets.
 """
 
 import sqlite3
@@ -150,6 +150,67 @@ def authenticate_user(username: str, password: str) -> dict:
             "role": user["role"]
         }
     return {"authenticated": False}
+
+
+# -------------------------------------------------------------
+# PROFILE EDIT & PASSWORD RESET HELPERS
+# -------------------------------------------------------------
+def reset_password_with_phone(username: str, phone: str, new_password: str) -> dict:
+    """Allows resetting password by verifying registered username and phone number."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM users WHERE LOWER(username) = ? AND phone = ?",
+        (username.strip().lower(), phone.strip())
+    )
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return {"success": False, "error": "No matching account found with that Username and Phone number."}
+
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (hash_password(new_password.strip()), user["id"])
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def update_user_password(user_id: int, current_password: str, new_password: str) -> dict:
+    """Changes password from within user settings by verifying current password."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    if not user or user["password_hash"] != hash_password(current_password.strip()):
+        conn.close()
+        return {"success": False, "error": "Current password does not match."}
+
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (hash_password(new_password.strip()), user_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def update_user_profile(user_id: int, full_name: str, phone: str) -> dict:
+    """Updates user full name and phone contact details."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE users SET full_name = ?, phone = ? WHERE id = ?",
+            (full_name.strip(), phone.strip(), user_id)
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        conn.close()
+        return {"success": False, "error": str(e)}
 
 
 # -------------------------------------------------------------

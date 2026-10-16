@@ -22,6 +22,9 @@ from engine.db import (
     init_db,
     register_user,
     authenticate_user,
+    reset_password_with_phone,
+    update_user_password,
+    update_user_profile,
     save_patient_evaluation,
     get_patient_history_3_months,
     save_clinician_evaluation,
@@ -110,14 +113,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------------------
-# MULTI-MODEL FALLBACK CALLER (PROTECTS AGAINST 503 / 404 / 429)
-# -------------------------------------------------------------
+# Multi-Model Fallback Caller (Protects against 503 / 404 / 429 Demand Spikes)
 def call_gemini_with_fallback(client, contents, system_instruction=None):
-    """
-    Attempts model generation across lightweight and standard fallback models,
-    handling high-traffic spikes (503), quota limits (429), or missing models (404).
-    """
     if client is None:
         return "⚠️ Gemini API client is uninitialized. Configure GEMINI_API_KEY in Streamlit secrets."
 
@@ -155,9 +152,7 @@ def call_gemini_with_fallback(client, contents, system_instruction=None):
         "*(Note: The AI explanation engine experienced peak traffic, showing default clinical safety guidelines. Please click again shortly for customized remarks.)*"
     )
 
-# -------------------------------------------------------------
-# SESSION STATE, QUERY PARAMETERS & VILLAGE MODE
-# -------------------------------------------------------------
+# Session State & Query Parameters
 query_params = st.query_params
 is_village_mode = query_params.get("mode") == "village"
 
@@ -168,12 +163,14 @@ if "authenticated" not in st.session_state:
         st.session_state.user_role = "Patient"
         st.session_state.user_name = "patient@gmail.com"
         st.session_state.full_name = "Community Patient (Village Mode)"
+        st.session_state.phone = "9876543210"
     else:
         st.session_state.authenticated = False
         st.session_state.user_id = None
         st.session_state.user_role = None
         st.session_state.user_name = ""
         st.session_state.full_name = ""
+        st.session_state.phone = ""
 
 def logout():
     st.session_state.authenticated = False
@@ -181,15 +178,14 @@ def logout():
     st.session_state.user_role = None
     st.session_state.user_name = ""
     st.session_state.full_name = ""
+    st.session_state.phone = ""
     if "scanned_data" in st.session_state:
         del st.session_state["scanned_data"]
     if "last_patient_batch" in st.session_state:
         del st.session_state["last_patient_batch"]
     st.rerun()
 
-# -------------------------------------------------------------
-# LIVE GEMINI CLINICAL AI ASSISTANT (PERSISTENT MODAL)
-# -------------------------------------------------------------
+# AI Assistant Persistent Modal
 @st.dialog("💬 HelixRx Clinical AI Assistant", width="large")
 def show_ai_assistant_dialog():
     st.caption("HelixRx Real-Time Precision AI. Ask any clinical, dosage, or genomic questions freely.")
@@ -219,8 +215,7 @@ def show_ai_assistant_dialog():
             "You are HelixRx AI, an expert multilingual clinical pharmacogenomics (PGx) and medication safety assistant. "
             "Respond naturally in whatever language the user asks their question in (e.g., English, Telugu, Hindi, Swahili). "
             "Provide clear, clinically accurate answers regarding medications, dosages, meal administration timing (Breakfast, Lunch, Dinner), "
-            "organ clearance (eGFR, ALT), and genetic guidelines (CPIC, FDA). Keep explanations practical and easy to understand for patients, "
-            "while maintaining strict medical accuracy. Always include a brief reminder to consult their healthcare provider."
+            "organ clearance (eGFR, ALT), and genetic guidelines (CPIC, FDA). Always remind patients never to change medication strengths without doctor clearance."
         )
 
         try:
@@ -241,16 +236,17 @@ def show_ai_assistant_dialog():
                 st.write(reply)
 
 # =============================================================
-# 1. LOGIN & REGISTRATION GATEWAY (UNAUTHENTICATED VIEW)
+# 1. LOGIN, REGISTRATION & FORGOT PASSWORD GATEWAY (UNAUTHENTICATED)
 # =============================================================
 if not st.session_state.authenticated:
     st.markdown('<h1 style="text-align:center;">🧬 Clinical Pharmacogenomics (PGx) Safety Engine</h1>', unsafe_allow_html=True)
     st.markdown('<p style="text-align:center; color:#9CA3AF;">Multi-Role Precision Architecture • Patient Records • Clinician Decision Support</p>', unsafe_allow_html=True)
 
-    _, mid_col, _ = st.columns([1, 1.8, 1])
+    _, mid_col, _ = st.columns([1, 1.9, 1])
     with mid_col:
-        auth_tab1, auth_tab2 = st.tabs(["🔐 Sign In to Portal", "📝 Register New Account"])
+        auth_tab1, auth_tab2, auth_tab3 = st.tabs(["🔐 Sign In", "📝 Register Account", "🔑 Forgot Password"])
 
+        # TAB 1: LOGIN
         with auth_tab1:
             with st.container(border=True):
                 st.markdown("#### **Account Login**")
@@ -261,26 +257,29 @@ if not st.session_state.authenticated:
                     clean_user = login_user.strip().lower()
                     clean_pw = login_pw.strip()
 
-                    # 1. DIRECT HARDCODED MASTER ADMIN BYPASS (Never Fails)
+                    # Direct Master Admin Bypass
                     if (clean_user == "umavinaykumar90815@gmail.com" or clean_user == "admin") and clean_pw == "admin123":
                         st.session_state.authenticated = True
                         st.session_state.user_id = 1
                         st.session_state.user_role = "Admin"
                         st.session_state.user_name = "umavinaykumar90815@gmail.com"
                         st.session_state.full_name = "Vinay"
+                        st.session_state.phone = "7981718577"
                         st.rerun()
 
-                    # 2. STANDARD DATABASE AUTHENTICATION
-                    auth_res = authenticate_user(login_user, login_pw)
+                    auth_res = authenticate_user(clean_user, clean_pw)
                     if auth_res["authenticated"]:
                         st.session_state.authenticated = True
                         st.session_state.user_id = auth_res["user_id"]
                         st.session_state.user_role = auth_res["role"]
                         st.session_state.user_name = auth_res["username"]
                         st.session_state.full_name = auth_res["full_name"]
+                        st.session_state.phone = auth_res.get("phone", "")
                         st.rerun()
                     else:
-                        st.error("Invalid credentials. Try: `patient@gmail.com`/`patient123`, `doctor@helix.org`/`doctor123`, or `umavinaykumar90815@gmail.com`/`admin123`")
+                        st.error("Invalid credentials. If you forgot your password, use the 'Forgot Password' tab above.")
+
+        # TAB 2: REGISTER
         with auth_tab2:
             with st.container(border=True):
                 st.markdown("#### **Create New Account**")
@@ -291,14 +290,38 @@ if not st.session_state.authenticated:
                 new_pw = st.text_input("Password", type="password")
 
                 if st.button("Complete Registration", type="primary", use_container_width=True):
-                    if not new_name or not new_email or not new_pw:
-                        st.warning("Please fill in all required fields.")
+                    if not new_name or not new_email or not new_pw or not new_phone:
+                        st.warning("Please fill in all fields including phone number (used for password recovery).")
                     else:
                         reg_res = register_user(new_email, new_name, new_phone, new_pw, role=account_type)
                         if reg_res["success"]:
-                            st.success(f"Registered successfully as {account_type}! Please sign in using the first tab.")
+                            st.success(f"Registered successfully as {account_type}! Please sign in using the Sign In tab.")
                         else:
                             st.error(reg_res["error"])
+
+        # TAB 3: FORGOT PASSWORD
+        with auth_tab3:
+            with st.container(border=True):
+                st.markdown("#### **Reset Your Password**")
+                st.caption("Verify your registered email and mobile number to set a new password.")
+                rec_user = st.text_input("Registered Email / Username", placeholder="e.g., patient@gmail.com", key="rec_user")
+                rec_phone = st.text_input("Registered Mobile Number", placeholder="e.g., 9876543210", key="rec_phone")
+                rec_new_pw = st.text_input("New Password", type="password", key="rec_new_pw")
+                rec_new_pw2 = st.text_input("Confirm New Password", type="password", key="rec_new_pw2")
+
+                if st.button("🔄 Reset Password", type="primary", use_container_width=True):
+                    if not rec_user or not rec_phone or not rec_new_pw:
+                        st.warning("Please complete all fields.")
+                    elif rec_new_pw != rec_new_pw2:
+                        st.error("Passwords do not match. Please re-enter.")
+                    elif len(rec_new_pw) < 6:
+                        st.warning("Password must be at least 6 characters.")
+                    else:
+                        reset_res = reset_password_with_phone(rec_user, rec_phone, rec_new_pw)
+                        if reset_res["success"]:
+                            st.success("✅ Password reset successfully! You can now sign in with your new password.")
+                        else:
+                            st.error(reset_res["error"])
 
 # =============================================================
 # 2. AUTHENTICATED PORTALS
@@ -319,7 +342,7 @@ else:
         )
         st.markdown(f"**Name:** `{st.session_state.full_name}`")
         st.markdown(f"**Username:** `{st.session_state.user_name}`")
-        st.markdown(f"**Active Portal:** `{st.session_state.user_role}`")
+        st.markdown(f"**Role:** `{st.session_state.user_role}`")
         
         if is_village_mode:
             st.info("🏕️ **Village Camp / QR Direct Mode Active**")
@@ -329,17 +352,16 @@ else:
             
         st.divider()
 
-        # Conversational AI Assistant Trigger Button
         if st.button("💬 Open HelixRx AI Assistant", use_container_width=True):
             show_ai_assistant_dialog()
 
         st.divider()
 
     # =========================================================
-    # ROLE A: PATIENT PORTAL (WITH 3-MONTH ARCHIVE)
+    # ROLE A: PATIENT PORTAL
     # =========================================================
     if st.session_state.user_role == "Patient":
-        default_lang_idx = 1 if is_village_mode else 0  # Default to Telugu if opened via village QR
+        default_lang_idx = 1 if is_village_mode else 0
         selected_lang = st.sidebar.selectbox(
             "🌐 Choose Language / భాష ఎంచుకోండి", 
             ["English", "Telugu", "Hindi", "Swahili (Kiswahili)"],
@@ -354,7 +376,7 @@ else:
         TRANSLATIONS = {
             "English": {
                 "portal_title": f"Welcome, {st.session_state.full_name}",
-                "portal_sub": "Verify treatment safety, target ranges, and meal-by-meal dosage adjustments against your latest test reports.",
+                "portal_sub": "Verify treatment compliance, target ranges, and meal-by-meal administration schedule with your doctor's supervision.",
                 "start_tour_btn": "🎯 Start Interactive Step-by-Step Tour",
                 "stop_tour_btn": "✖ Exit Tour",
                 "step1_tip": "👇 STEP 1: Select your chronic condition from this dropdown.",
@@ -370,21 +392,20 @@ else:
                 "col2_title": "2️⃣ Current Prescribed Medication(s)",
                 "med_label": "Select All Medicines You Take for this Condition:",
                 "egfr_label": "Patient eGFR Metric (mL/min, default: 90)",
-                "eval_btn": "🔍 Evaluate Protocol & Save to Medical History",
-                "results_header": "📊 Evaluation Assessment & Meal Administration Schedule",
-                "safe_badge": "✅ CURRENT DOSE IS OPTIMAL & SAFE",
-                "warn_badge": "⚠️ ADJUSTMENT / TITRATION RECOMMENDED",
-                "contra_badge": "⛔ CONTRAINDICATED / KIDNEY SAFETY WARNING",
-                "curr_dose": "Current Daily Dose:",
-                "rec_dose": "Target-Adjusted Dose:",
+                "eval_btn": "🔍 Verify Safety & Meal Schedule",
+                "results_header": "📊 Clinical Assessment & Meal Schedule",
+                "safe_badge": "✅ REGIMEN CURRENTLY OPTIMAL",
+                "warn_badge": "⚠️ CLINICAL REVIEW & TITRATION REQUIRED",
+                "contra_badge": "🚨 SAFETY ALERT: DOCTOR REVIEW URGENT",
+                "curr_dose": "Prescribed Daily Dose:",
                 "details_title": "🩺 Clinical Assessment Details:",
-                "safety_note": "💡 **Patient Safety Note:** Please consult your healthcare provider prior to changing your prescribed dosage or meal timing.",
+                "safety_note": "💡 **Patient Safety Note:** Never change your tablet strength without physician clearance. Your doctor will make necessary titration adjustments.",
                 "explain_btn": "🗣️ Explain in Plain Language",
                 "generating": "Generating patient explanation..."
             },
             "Telugu": {
                 "portal_title": f"స్వాగతం, {st.session_state.full_name}",
-                "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో చికిత్స భద్రత మరియు సరైన భోజన సమయాల మోతాదును ధృవీకరించండి.",
+                "portal_sub": "మీ తాజా పరీక్ష నివేదికలతో మందుల భద్రత మరియు సరైన భోజన సమయాల మోతాదును ధృవీకరించండి.",
                 "start_tour_btn": "🎯 ఇంటరాక్టివ్ గైడెడ్ టూర్ ప్రారంభించండి",
                 "stop_tour_btn": "✖ టూర్ ముగించు",
                 "step1_tip": "👇 దశ 1: ఇక్కడ మీ వ్యాధిని ఎంచుకోండి.",
@@ -400,21 +421,20 @@ else:
                 "col2_title": "2️⃣ ప్రస్తుతం వాడుతున్న మందు(లు)",
                 "med_label": "ఈ సమస్య కోసం మీరు వాడుతున్న అన్ని మందులను ఎంచుకోండి:",
                 "egfr_label": "రోగి eGFR విలువ (mL/min, సాధారణం: 90)",
-                "eval_btn": "🔍 ప్రోటోకాల్ & భోజన సమయాల మోతాదును అంచనా వేయండి",
-                "results_header": "📊 మూల్యాంకన ఫలితాలు & భోజన సమయాల ప్రణాళిక",
+                "eval_btn": "🔍 భద్రత & భోజన సమయాల ప్రణాళికను తనిఖీ చేయండి",
+                "results_header": "📊 క్లినికల్ మూల్యాంకన ఫలితాలు & భోజన సమయాల ప్రణాళిక",
                 "safe_badge": "✅ ప్రస్తుత మోతాదు సురక్షితమైనది మరియు సరైనది",
-                "warn_badge": "⚠️ మోతాదు సర్దుబాటు సిఫార్సు చేయబడింది",
-                "contra_badge": "⛔ తీవ్రమైన ప్రమాదం / కిడ్నీ భద్రతా హెచ్చరిక",
+                "warn_badge": "⚠️ డాక్టర్ సంప్రదింపు & మోతాదు సర్దుబాటు అవసరం",
+                "contra_badge": "🚨 అత్యవసర భద్రతా హెచ్చరిక: వెంటనే డాక్టర్‌ను కలవండి",
                 "curr_dose": "ప్రస్తుత రోజువారీ మోతాదు:",
-                "rec_dose": "సిఫార్సు చేసిన సరైన మోతాదు:",
                 "details_title": "🩺 క్లినికల్ మూల్యాంకన వివరాలు:",
-                "safety_note": "💡 **గమనిక:** మీ మోతాదును లేదా సమయాలను మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి.",
+                "safety_note": "💡 **గమనిక:** మీ మోతాదును మార్చడానికి ముందు దయచేసి మీ వైద్యుడిని సంప్రదించండి. స్వతంత్రంగా మోతాదు మార్చవద్దు.",
                 "explain_btn": "🗣️ సులభమైన తెలుగులో వివరణ పొందండి",
                 "generating": "తెలుగులో వివరణ రూపొందించబడుతోంది..."
             },
             "Hindi": {
                 "portal_title": f"नमस्ते, {st.session_state.full_name}",
-                "portal_sub": "अपनी नवीनतम परीक्षण रिपोर्टों के विरुद्ध उपचार सुरक्षा और भोजन-वार खुराक समायोजन की जाँच करें।",
+                "portal_sub": "अपनी परीक्षण रिपोर्टों के अनुसार उपचार सुरक्षा और भोजन-वार खुराक अनुसूची की जाँच करें।",
                 "start_tour_btn": "🎯 इंटरएक्टिव गाइडेड टूर शुरू करें",
                 "stop_tour_btn": "✖ टूर बंद करें",
                 "step1_tip": "👇 चरण 1: यहाँ अपनी बीमारी का चयन करें।",
@@ -430,21 +450,20 @@ else:
                 "col2_title": "2️⃣ वर्तमान निर्धारित दवा(एं)",
                 "med_label": "इस बीमारी के लिए ली जाने वाली सभी दवाएं चुनें:",
                 "egfr_label": "मरीज का eGFR स्तर (mL/min, डिफ़ॉल्ट: 90)",
-                "eval_btn": "🔍 प्रोटोकॉल और भोजन-वार खुराक का मूल्यांकन करें",
+                "eval_btn": "🔍 सुरक्षा और भोजन-वार खुराक सत्यापित करें",
                 "results_header": "📊 मूल्यांकन परिणाम और भोजन-वार खुराक तालिका",
                 "safe_badge": "✅ वर्तमान खुराक इष्टतम और सुरक्षित है",
-                "warn_badge": "⚠️ खुराक समायोजन की सिफारिश की गई है",
-                "contra_badge": "⛔ गंभीर चेतावनी / किडनी सुरक्षा जोखिम",
+                "warn_badge": "⚠️ डॉक्टर से परामर्श और खुराक समायोजन आवश्यक",
+                "contra_badge": "🚨 सुरक्षा चेतावनी: तुरंत अपने डॉक्टर से मिलें",
                 "curr_dose": "वर्तमान दैनिक खुराक:",
-                "rec_dose": "अनुशंसित समायोजित खुराक:",
                 "details_title": "🩺 चिकित्सीय मूल्यांकन विवरण:",
-                "safety_note": "💡 **सुरक्षा नोट:** कृपया अपनी निर्धारित खुराक या समय बदलने से पहले अपने डॉक्टर से परामर्श लें।",
+                "safety_note": "💡 **सुरक्षा नोट:** डॉक्टर की अनुमति के बिना अपनी दवा की मात्रा न बदलें।",
                 "explain_btn": "🗣️ सरल हिंदी में स्पष्टीकरण प्राप्त करें",
                 "generating": "हिंदी में विवरण तैयार किया जा रहा है..."
             },
             "Swahili (Kiswahili)": {
                 "portal_title": f"Karibu, {st.session_state.full_name}",
-                "portal_sub": "Thibitisha usalama wa matibabu, vipimo vya afya, na mpango wa kugawa vidonge kulingana na milo.",
+                "portal_sub": "Thibitisha usalama wa matibabu na mpango wa kugawa vidonge kulingana na milo chini ya uangalizi wa daktari.",
                 "start_tour_btn": "🎯 Anza Mwongozo wa Hatua kwa Hatua",
                 "stop_tour_btn": "✖ Toka Kwenye Mwongozo",
                 "step1_tip": "👇 HATUA YA 1: Chagua ugonjwa wako wa kudumu kwenye orodha hii.",
@@ -460,15 +479,14 @@ else:
                 "col2_title": "2️⃣ Dawa Unazotumia Hivi Sasa",
                 "med_label": "Chagua dawa zote unazotumia kwa ugonjwa huu:",
                 "egfr_label": "Kipimo cha Utendaji Kazi wa Figo - eGFR (mL/min, kawaida: 90)",
-                "eval_btn": "🔍 Tathmini Mpango wa Dawa Kulingana na Milo",
+                "eval_btn": "🔍 Thibitisha Mpango wa Milo",
                 "results_header": "📊 Matokeo ya Tathmini na Ratiba ya Vidonge Kulingana na Milo",
                 "safe_badge": "✅ DOZI YA SASA NI SALAMA NA INAFAA",
-                "warn_badge": "⚠️ MABADILIKO YA DOZI YANASHAURIWA",
-                "contra_badge": "⛔ ONYO KALI: HATARI KWA FIGO / USITUMIE",
+                "warn_badge": "⚠️ TATHMINI YA DAKTARI INAHITAJIKA",
+                "contra_badge": "🚨 ONYO LA USALAMA: WASILIANA NA DAKTARI HARAKA",
                 "curr_dose": "Dozi ya Sasa ya Kila Siku:",
-                "rec_dose": "Dozi Inayoshauriwa:",
                 "details_title": "🩺 Sababu za Kitabibu:",
-                "safety_note": "💡 **Ujumbe wa Usalama:** Tafadhali wasiliana na daktari wako kabla ya kubadilisha dozi au ratiba ya kumeza dawa.",
+                "safety_note": "💡 **Ujumbe wa Usalama:** Usibadilishe kiasi cha vidonge bila idhini ya daktari wako.",
                 "explain_btn": "🗣️ Eleza kwa Kiswahili Rahisi",
                 "generating": "Maelezo kwa Kiswahili yanatayarishwa..."
             }
@@ -483,40 +501,33 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        patient_tab1, patient_tab2 = st.tabs([
+        patient_tab1, patient_tab2, patient_tab3 = st.tabs([
             "💊 Today's Medication & Meal Schedule", 
-            "📜 My 3-Month Medical History & Archive"
+            "📜 My 3-Month Medical History & Archive",
+            "⚙️ My Profile & Security Settings"
         ])
 
         with patient_tab1:
-            # ---------------------------------------------------------
-            # DUAL-CAMERA SNAP ASSISTANT FOR VILLAGE & COMMUNITY USERS
-            # ---------------------------------------------------------
+            # Dual Camera OCR Expander
             with st.expander("📸 **Can't read the test numbers or pill names? Snap photos instead!**", expanded=False):
-                st.info("💡 Point your phone camera or upload photos of your **Lab Test Paper** and **Medicine Strip/Box**. HelixRx AI will read the numbers and populate your schedule automatically.")
-
-                cam1, cam2 = st.columns(2)
-                with cam1:
-                    st.markdown("##### 📄 1. Lab Test Report Photo")
+                st.info("💡 Point your camera at your **Lab Test Paper** and **Medicine Strip/Box**. HelixRx AI will populate the schedule automatically.")
+                c_cam1, c_cam2 = st.columns(2)
+                with c_cam1:
                     report_snap = st.camera_input("Snap lab report", key="cam_report")
                     if not report_snap:
                         report_snap = st.file_uploader("Or upload report image", type=["png", "jpg", "jpeg"], key="up_report")
-
-                with cam2:
-                    st.markdown("##### 💊 2. Medicine Strip / Box Photo")
-                    meds_snap = st.camera_input("Snap tablet strip", key="cam_meds")
+                with c_cam2:
+                    meds_snap = st.camera_input("Snap medicine strip", key="cam_meds")
                     if not meds_snap:
                         meds_snap = st.file_uploader("Or upload tablet strip image", type=["png", "jpg", "jpeg"], key="up_meds")
 
                 if report_snap or meds_snap:
                     if st.button("⚡ Scan Photos & Auto-Fill Schedule", type="primary", use_container_width=True):
-                        with st.spinner("Reading lab numbers and tablet packaging..."):
+                        with st.spinner("AI is reading your lab test numbers and medicine strip..."):
                             img_report = Image.open(report_snap) if report_snap else None
                             img_meds = Image.open(meds_snap) if meds_snap else None
                             api_key = st.secrets.get("GEMINI_API_KEY", "")
-
                             parsed = analyze_prescription_and_report_images(img_report, img_meds, api_key)
-
                             if "error" in parsed:
                                 st.error(f"Scan issue: {parsed['error']}")
                             else:
@@ -537,7 +548,7 @@ else:
                         del st.session_state["scanned_data"]
                         st.rerun()
 
-            # Tour Toggle Button Bar
+            # Tour Controls
             tb_col1, _ = st.columns([2, 1])
             with tb_col1:
                 if not st.session_state.tutorial_active:
@@ -551,7 +562,6 @@ else:
                         st.session_state.tutorial_step = 1
                         st.rerun()
 
-            # Step Controller Bar (Shown only during active tour)
             if st.session_state.tutorial_active:
                 ctrl_c1, ctrl_c2, ctrl_c3 = st.columns([1, 1, 2])
                 with ctrl_c1:
@@ -573,7 +583,6 @@ else:
 
             st.write("---")
 
-            # Resolve Auto-Filled Vitals from Camera Scan (if active)
             auto_v = st.session_state.get("scanned_data", {}).get("vitals", {})
             auto_detected_disease = st.session_state.get("scanned_data", {}).get("detected_condition", "Diabetes")
 
@@ -589,7 +598,6 @@ else:
             with col1:
                 st.subheader(t["col1_title"])
 
-                # STEP 1 POINTER
                 if st.session_state.tutorial_active and st.session_state.tutorial_step == 1:
                     st.markdown(f'<div class="tutorial-pointer">{t["step1_tip"]}</div>', unsafe_allow_html=True)
 
@@ -600,7 +608,6 @@ else:
                     key="pat_disease_sel"
                 )
 
-                # STEP 2 POINTER
                 if st.session_state.tutorial_active and st.session_state.tutorial_step == 2:
                     st.markdown(f'<div class="tutorial-pointer">{t["step2_tip"]}</div>', unsafe_allow_html=True)
 
@@ -667,11 +674,9 @@ else:
             with col2:
                 st.subheader(t["col2_title"])
 
-                # STEP 3 POINTER
                 if st.session_state.tutorial_active and st.session_state.tutorial_step == 3:
                     st.markdown(f'<div class="tutorial-pointer">{t["step3_tip"]}</div>', unsafe_allow_html=True)
 
-                # Auto-match scanned medicines if available
                 auto_detected_meds_list = []
                 auto_strengths = {}
                 if "scanned_data" in st.session_state:
@@ -709,7 +714,7 @@ else:
                     for med in selected_meds:
                         def_val = auto_strengths.get(med, default_map.get(med, 10.0))
                         patient_doses[med] = st.number_input(
-                            f"Current Daily Dose for {med} (mg / mcg / Units):",
+                            f"Current Prescribed Daily Dose for {med} (mg):",
                             min_value=0.0,
                             max_value=3000.0,
                             value=def_val,
@@ -723,7 +728,6 @@ else:
 
             st.write("---")
 
-            # STEP 4 POINTER
             if st.session_state.tutorial_active and st.session_state.tutorial_step == 4:
                 st.markdown(f'<div class="tutorial-pointer">{t["step4_tip"]}</div>', unsafe_allow_html=True)
 
@@ -737,8 +741,9 @@ else:
                         eval_res = evaluate_disease_management(
                             condition, med, curr_d, vitals_payload, egfr=patient_egfr_val
                         )
+                        # Partition according to current prescribed dose so patient takes exactly what doctor wrote
                         meal_advice = generate_meal_titration_instruction(
-                            med, curr_d, eval_res["recommended_dose_mg"]
+                            med, curr_d, curr_d
                         )
                         eval_res["meal_advice"] = meal_advice
                         batch_evaluations.append(eval_res)
@@ -757,72 +762,91 @@ else:
                         )
                         st.toast(f"💾 Screening saved to Medical History (Record #{rec_id})")
 
-            # DISPLAY RESULTS WITH VISUAL MEAL PILL BOX CARDS & REMINDERS
+            # DISPLAY RESULTS (PATIENT-SAFE: NO SPECIFIC NUMERICAL TITRATION SHOWN)
             if "last_patient_batch" in st.session_state:
                 st.subheader(t["results_header"])
 
-                # 1. VISUAL "MEAL PILL BOX" CARDS
                 for res in st.session_state.last_patient_batch:
                     med_name = res["drug"]
                     adv = res["meal_advice"]
+                    is_safe = res["dose_correct"]
+                    is_contra = "Renal" in res.get("status", "") or "Contraindicated" in res.get("status", "")
 
                     with st.container(border=True):
-                        h1, h2 = st.columns([2.5, 1.5])
+                        h1, h2 = st.columns([2.2, 1.8])
                         with h1:
                             st.markdown(f"### 💊 {med_name}")
-                            st.markdown(f"**{adv['action_text']}**")
+                            st.markdown(f"**Prescribed Dose:** `{res.get('current_dose_mg')} mg/day`")
                         with h2:
-                            if res["dose_correct"]:
-                                st.markdown(f'<span class="badge-green">{t["safe_badge"]}</span>', unsafe_allow_html=True)
-                            elif "Renal" in res["status"] or "Contraindicated" in res["status"]:
-                                st.markdown(f'<span class="badge-red">{t["contra_badge"]}</span>', unsafe_allow_html=True)
+                            if is_contra:
+                                st.markdown(
+                                    '<div style="background:#fee2e2; border:1px solid #ef4444; color:#b91c1c; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
+                                    '🚨 SAFETY ALERT: DOCTOR REVIEW URGENT<br><small style="font-weight:400;">Kidney/Organ Threshold Reached</small>'
+                                    '</div>', 
+                                    unsafe_allow_html=True
+                                )
+                            elif not is_safe:
+                                st.markdown(
+                                    '<div style="background:#fef3c7; border:1px solid #f59e0b; color:#b45309; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
+                                    '⚠️ CLINICAL REVIEW & TITRATION REQUIRED<br><small style="font-weight:400;">Recent test values indicate adjustment needed</small>'
+                                    '</div>', 
+                                    unsafe_allow_html=True
+                                )
                             else:
-                                st.markdown(f'<span class="badge-yellow">{t["warn_badge"]}</span>', unsafe_allow_html=True)
+                                st.markdown(
+                                    '<div style="background:#dcfce7; border:1px solid #22c55e; color:#15803d; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
+                                    '✅ REGIMEN CURRENTLY OPTIMAL<br><small style="font-weight:400;">Within standard therapeutic targets</small>'
+                                    '</div>', 
+                                    unsafe_allow_html=True
+                                )
 
-                        st.markdown("#### 🍱 Daily Visual Pill Box Schedule")
+                        st.write("")
 
-                        # 3 Styled Meal Columns
+                        # Triage Guidance
+                        if not is_safe or is_contra:
+                            st.warning(
+                                "🩺 **Physician Clearance Required:** Your recent test values suggest your current dosage needs adjustment. "
+                                "Your attending physician will evaluate your tests and decide the exact modified dosage or medication change. "
+                                "**Do not self-adjust your tablet strength without your doctor's supervision.**"
+                            )
+
+                        st.markdown("#### 🍱 Daily Routine for Your Prescribed Medicine")
+
                         b_col, l_col, d_col = st.columns(3)
 
-                        # Morning Card
                         with b_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #d97706; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                                <div style="font-size: 1.1rem; font-weight: 700;">🌅 Morning (Breakfast)</div>
-                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #fef08a;">{adv.get('morning_dose', '—')}</div>
-                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('morning_timing', 'None')}</div>
+                            <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 14px; border-radius: 12px; color: white;">
+                                <b>🌅 Morning (Breakfast)</b><br>
+                                <span style="font-size: 1.2rem; font-weight:800; color: #fef08a;">{adv.get('morning_dose', '—')}</span><br>
+                                <small>📌 {adv.get('morning_timing', 'None')}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # Afternoon Card
                         with l_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                                <div style="font-size: 1.1rem; font-weight: 700;">☀️ Afternoon (Lunch)</div>
-                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</div>
-                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('afternoon_timing', 'None')}</div>
+                            <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 14px; border-radius: 12px; color: white;">
+                                <b>☀️ Afternoon (Lunch)</b><br>
+                                <span style="font-size: 1.2rem; font-weight:800; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</span><br>
+                                <small>📌 {adv.get('afternoon_timing', 'None')}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
-                        # Night Card
                         with d_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 16px; border-radius: 12px; color: white; border: 1px solid #818cf8; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                                <div style="font-size: 1.1rem; font-weight: 700;">🌙 Night (Dinner)</div>
-                                <div style="font-size: 1.6rem; font-weight: 800; margin: 8px 0; color: #c7d2fe;">{adv.get('night_dose', '—')}</div>
-                                <div style="font-size: 0.85rem; background: rgba(0,0,0,0.25); padding: 6px 8px; border-radius: 6px;">📌 {adv.get('night_timing', 'None')}</div>
+                            <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 14px; border-radius: 12px; color: white;">
+                                <b>🌙 Night (Dinner)</b><br>
+                                <span style="font-size: 1.2rem; font-weight:800; color: #c7d2fe;">{adv.get('night_dose', '—')}</span><br>
+                                <small>📌 {adv.get('night_timing', 'None')}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
                         st.write("")
-                        st.caption(f"💡 **Clinical Administration Rule:** {adv['clinical_note']}")
-                        with st.expander("🩺 View Detailed Lab Metric Rationale"):
-                            for r in res["reasons"]:
-                                st.write(f"• {r}")
+                        st.caption(f"💡 **Clinical Administration Rule:** {adv.get('clinical_note', 'Take with meals as directed by your doctor.')}")
 
                 st.write("---")
 
-                # 2. POP-UP MEDICATION REMINDER SYSTEM
+                # Daily Pop-Up Meal Dose Reminders
                 st.markdown("### ⏰ Set Daily Meal Dose Reminders (Pop-Up & Audio)")
                 st.caption("HelixRx can send browser alerts to your phone or laptop at meal times so you never miss a dose.")
 
@@ -884,7 +908,6 @@ else:
 
                 st.info(t["safety_note"])
 
-                # STEP 5 POINTER
                 if st.session_state.tutorial_active and st.session_state.tutorial_step == 5:
                     st.markdown(f'<div class="tutorial-pointer">{t["step5_tip"]}</div>', unsafe_allow_html=True)
 
@@ -898,21 +921,19 @@ else:
                                 drugs_summary = []
                                 for r in st.session_state.last_patient_batch:
                                     drugs_summary.append(
-                                        f"- Medication: {r['drug']}, Current: {r['current_dose_mg']}, Recommended: {r['recommended_dose_mg']}\n"
-                                        f"  Meal Plan: {r['meal_advice']['split_plan']}\n"
+                                        f"- Medication: {r['drug']}, Prescribed Dose: {r['current_dose_mg']} mg, Status: {r['status']}\n"
                                         f"  Reasons: {' '.join(r['reasons'])}"
                                     )
                                 
                                 explain_prompt = f"""
-                                You are a friendly, compassionate clinical doctor explaining a test evaluation directly to a patient.
-                                Explain this clinical assessment result clearly in {selected_lang}.
-                                Avoid dense medical jargon. Use simple, conversational words.
+                                You are a compassionate clinical doctor explaining a test evaluation directly to an Indian patient.
+                                Explain this clinical assessment clearly in {selected_lang}.
+                                Emphasize that they must NOT change their tablet dose on their own, but rather show these test numbers to their doctor.
+                                Explain clearly how they should take their prescribed pills with breakfast, lunch, and dinner to avoid stomach upset or sugar drops.
 
                                 Details:
                                 - Diagnosis / Condition: {st.session_state.last_patient_condition}
                                 {chr(10).join(drugs_summary)}
-
-                                Explain clearly how they should take their medicines across breakfast, lunch, and dinner, and provide a 3-4 sentence reassurance with questions they should ask their doctor at their next appointment.
                                 """
                                 exp_text = call_gemini_with_fallback(client, explain_prompt)
                                 st.success(exp_text)
@@ -935,19 +956,60 @@ else:
                 else:
                     for rec in history_records:
                         with st.expander(f"🗓️ Visit: {rec['timestamp']} — {rec['condition']} ({rec['clinical_status']})", expanded=False):
-                            badge = "🟢 Safe" if rec["clinical_status"] == "Optimal" else "🔴 Warning / Adjustment Needed"
-                            st.markdown(f"**Overall Status:** {badge} | **Method:** {'📸 Photo Scanned' if rec['scanned'] else '⌨️ Manually Entered'}")
-                            st.markdown("##### 🩺 Test Biomarkers Recorded:")
+                            badge = "🟢 Safe" if rec["clinical_status"] == "Optimal" else "🟡 Adjustment Recommended" if rec["clinical_status"] == "Adjustment Recommended" else "🔴 Warning / Safety Alert"
+                            st.markdown(f"**Overall Clinical Status:** {badge} | **Method:** {'📸 Photo Scanned' if rec['scanned'] else '⌨️ Manually Entered'}")
+                            st.markdown("##### 🩺 Test Biomarkers:")
                             st.json(rec["vitals"])
-                            st.markdown("##### 💊 Prescribed Medications & Meal Schedules on this Date:")
+                            st.markdown("##### 💊 Prescribed Medications Taken:")
                             for med_eval in rec["medications"]:
-                                st.write(f"• **{med_eval.get('drug')}**: Current {med_eval.get('current_dose_mg')} mg ➔ Target: {med_eval.get('recommended_dose_mg')} mg")
-                                adv = med_eval.get("meal_advice", {})
-                                if adv:
-                                    st.caption(f"  - Morning: {adv.get('morning_dose')} | Afternoon: {adv.get('afternoon_dose')} | Night: {adv.get('night_dose')}")
+                                st.write(f"• **{med_eval.get('drug')}**: Prescribed `{med_eval.get('current_dose_mg')} mg/day` — Status: **{med_eval.get('status', 'Logged')}**")
+
+        # -----------------------------------------------------
+        # EDIT PATIENT PROFILE & CHANGE PASSWORD
+        # -----------------------------------------------------
+        with patient_tab3:
+            st.subheader("⚙️ My Profile & Security Settings")
+            prof_col1, prof_col2 = st.columns(2)
+
+            with prof_col1:
+                with st.container(border=True):
+                    st.markdown("#### 👤 Update Personal Profile")
+                    edit_name = st.text_input("Full Name", value=st.session_state.full_name, key="p_edit_name")
+                    edit_phone = st.text_input("Mobile Phone Number", value=st.session_state.phone, key="p_edit_phone")
+                    
+                    if st.button("Save Profile Changes", type="primary", key="btn_save_p_profile"):
+                        up_res = update_user_profile(st.session_state.user_id, edit_name, edit_phone)
+                        if up_res["success"]:
+                            st.session_state.full_name = edit_name
+                            st.session_state.phone = edit_phone
+                            st.success("✅ Profile updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error(up_res["error"])
+
+            with prof_col2:
+                with st.container(border=True):
+                    st.markdown("#### 🔒 Change Password")
+                    cur_pw = st.text_input("Current Password", type="password", key="p_cur_pw")
+                    new_pw = st.text_input("New Password", type="password", key="p_new_pw")
+                    new_pw2 = st.text_input("Confirm New Password", type="password", key="p_new_pw2")
+
+                    if st.button("Update Password", key="btn_update_p_pw"):
+                        if not cur_pw or not new_pw:
+                            st.warning("Please fill in both current and new passwords.")
+                        elif new_pw != new_pw2:
+                            st.error("New passwords do not match.")
+                        elif len(new_pw) < 6:
+                            st.warning("New password must be at least 6 characters.")
+                        else:
+                            pw_res = update_user_password(st.session_state.user_id, cur_pw, new_pw)
+                            if pw_res["success"]:
+                                st.success("✅ Password updated successfully!")
+                            else:
+                                st.error(pw_res["error"])
 
     # =========================================================
-    # ROLE B: CLINICIAN PORTAL (WITH 6-MONTH AUDIT ARCHIVE)
+    # ROLE B: CLINICIAN PORTAL
     # =========================================================
     elif st.session_state.user_role == "Clinician":
         st.markdown(f"""
@@ -957,12 +1019,13 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📊 Active Patient Prescribing", 
             "🤖 ML Novel Variant Predictor", 
             "📈 Dynamic PK Concentration Curves", 
             "📑 Clinical Summary & EHR",
-            "🗂️ 6-Month Clinical Decision Archive"
+            "🗂️ 6-Month Clinical Decision Archive",
+            "⚙️ Clinician Profile & Security"
         ])
 
         ml_predictor = VariantImpactPredictor()
@@ -1198,8 +1261,46 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
             else:
                 st.info("No clinical sessions logged in the last 6 months.")
 
+        with tab6:
+            st.subheader("⚙️ Clinician Profile & Security")
+            c_col1, c_col2 = st.columns(2)
+            with c_col1:
+                with st.container(border=True):
+                    st.markdown("#### 🧑‍⚕️ Update Clinician Profile")
+                    c_name = st.text_input("Physician Full Name", value=st.session_state.full_name, key="c_edit_name")
+                    c_phone = st.text_input("Contact Number", value=st.session_state.phone, key="c_edit_phone")
+                    if st.button("Save Clinician Details", type="primary", key="btn_save_c_profile"):
+                        up_res = update_user_profile(st.session_state.user_id, c_name, c_phone)
+                        if up_res["success"]:
+                            st.session_state.full_name = c_name
+                            st.session_state.phone = c_phone
+                            st.success("✅ Profile updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error(up_res["error"])
+
+            with c_col2:
+                with st.container(border=True):
+                    st.markdown("#### 🔒 Change Clinician Password")
+                    c_cur_pw = st.text_input("Current Password", type="password", key="c_cur_pw")
+                    c_new_pw = st.text_input("New Password", type="password", key="c_new_pw")
+                    c_new_pw2 = st.text_input("Confirm New Password", type="password", key="c_new_pw2")
+                    if st.button("Update Clinician Password", key="btn_update_c_pw"):
+                        if not c_cur_pw or not c_new_pw:
+                            st.warning("Please fill in all password fields.")
+                        elif c_new_pw != c_new_pw2:
+                            st.error("Passwords do not match.")
+                        elif len(c_new_pw) < 6:
+                            st.warning("Password must be at least 6 characters.")
+                        else:
+                            pw_res = update_user_password(st.session_state.user_id, c_cur_pw, c_new_pw)
+                            if pw_res["success"]:
+                                st.success("✅ Password updated successfully!")
+                            else:
+                                st.error(pw_res["error"])
+
     # =========================================================
-    # ROLE C: SYSTEM ADMINISTRATOR PORTAL (FULL AUDIT & USAGE)
+    # ROLE C: SYSTEM ADMINISTRATOR PORTAL
     # =========================================================
     else:  # Admin
         st.markdown("""
@@ -1220,10 +1321,11 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
 
         st.divider()
 
-        adm_tab1, adm_tab2, adm_tab3 = st.tabs([
+        adm_tab1, adm_tab2, adm_tab3, adm_tab4 = st.tabs([
             "👥 Registered Users & Credentials Audit", 
             "📜 Patient Screenings History", 
-            "🧑‍⚕️ Clinician Prescribing History"
+            "🧑‍⚕️ Clinician Prescribing History",
+            "⚙️ Admin Account & Security Settings"
         ])
 
         with adm_tab1:
@@ -1241,9 +1343,8 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
 
             st.write("---")
             st.subheader("🔍 User Deep-Dive & Clinical History Inspector")
-            st.caption("Select any registered user below to view their profile, past visits, test biomarkers, and complete medication plans.")
+            st.caption("Select any registered user below to view their profile, past visits, test biomarkers, and complete clinical dosage calculations.")
 
-            # Create selector list with name, username, and role
             user_options = {
                 f"{u['full_name']} ({u['username']}) - [{u['role']}]": u
                 for u in metrics["users"]
@@ -1272,7 +1373,7 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
 
                 st.write("")
 
-                # 1. IF PATIENT: DISPLAY ALL MEDICAL VISITS & PRESCRIBED MEAL SCHEDULES
+                # 1. IF PATIENT: ADMIN SEES BOTH PRESCRIBED & SYSTEM-RECOMMENDED TITRATED DOSAGE
                 if t_role == "Patient":
                     p_records = get_patient_history_3_months(t_uid)
                     st.markdown(f"#### 🩺 Medical Evaluation History for {target_user['full_name']} ({len(p_records)} Records)")
@@ -1281,7 +1382,7 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
                         st.info(f"No clinical evaluation records logged for {target_user['full_name']} yet.")
                     else:
                         for idx, p_rec in enumerate(p_records):
-                            badge_color = "🟢" if p_rec["clinical_status"] == "Optimal" else "🔴"
+                            badge_color = "🟢" if p_rec["clinical_status"] == "Optimal" else "🟡" if p_rec["clinical_status"] == "Adjustment Recommended" else "🔴"
                             exp_title = f"{badge_color} Visit #{p_rec['id']} • {p_rec['timestamp']} — {p_rec['condition']} ({p_rec['clinical_status']})"
                             
                             with st.expander(exp_title, expanded=(idx == 0)):
@@ -1298,21 +1399,29 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
                                     st.caption(f"Entry mode: {'📸 Scanned via camera' if p_rec['scanned'] else '⌨️ Manual entry'}")
 
                                 with r_c2:
-                                    st.markdown("##### 💊 Prescribed Medications & Pill Box Plans")
+                                    st.markdown("##### 💊 Clinical Dosage & Titration Analysis (Admin-Only Visibility)")
                                     meds = p_rec.get("medications", [])
                                     if meds:
                                         for m in meds:
                                             with st.container(border=True):
-                                                st.markdown(f"**{m.get('drug')}** — Current: `{m.get('current_dose_mg')} mg` ➔ Recommended: `{m.get('recommended_dose_mg')} mg`")
-                                                adv = m.get("meal_advice", {})
-                                                if adv:
-                                                    st.caption(f"• 🌅 **Morning:** {adv.get('morning_dose', '—')} ({adv.get('morning_timing', '')})")
-                                                    st.caption(f"• ☀️ **Afternoon:** {adv.get('afternoon_dose', '—')} ({adv.get('afternoon_timing', '')})")
-                                                    st.caption(f"• 🌙 **Night:** {adv.get('night_dose', '—')} ({adv.get('night_timing', '')})")
+                                                curr_d = m.get('current_dose_mg', 0)
+                                                rec_d = m.get('recommended_dose_mg', curr_d)
+                                                
+                                                if curr_d != rec_d:
+                                                    st.markdown(f"**{m.get('drug')}**: Currently Taking `{curr_d} mg` ➔ **Recommended Titration: `{rec_d} mg`** ⚠️")
+                                                else:
+                                                    st.markdown(f"**{m.get('drug')}**: Currently Taking `{curr_d} mg` (Optimal Dose) ✅")
+
+                                                st.caption(f"Status: **{m.get('status', 'Logged')}**")
+                                                
+                                                reasons = m.get("reasons", [])
+                                                if reasons:
+                                                    for r in reasons:
+                                                        st.caption(f"• *{r}*")
                                     else:
                                         st.caption("No medication records saved for this visit.")
 
-                # 2. IF CLINICIAN: DISPLAY CLINICAL SESSIONS & PGX AUDITS
+                # 2. IF CLINICIAN
                 elif t_role == "Clinician":
                     c_records = get_clinician_history_6_months(t_uid)
                     st.markdown(f"#### 🧑‍⚕️ Clinical Prescribing Sessions by Dr. {target_user['full_name']} ({len(c_records)} Records)")
@@ -1358,3 +1467,41 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
                 )
             else:
                 st.info("No clinician audit logs recorded yet.")
+
+        with adm_tab4:
+            st.subheader("⚙️ Admin Account & Security Settings")
+            adm_col1, adm_col2 = st.columns(2)
+            with adm_col1:
+                with st.container(border=True):
+                    st.markdown("#### 🛡️ Administrator Details")
+                    adm_name = st.text_input("Admin Name", value=st.session_state.full_name, key="adm_edit_name")
+                    adm_phone = st.text_input("Admin Phone", value=st.session_state.phone, key="adm_edit_phone")
+                    if st.button("Save Admin Profile", type="primary", key="btn_save_adm_profile"):
+                        up_res = update_user_profile(st.session_state.user_id, adm_name, adm_phone)
+                        if up_res["success"]:
+                            st.session_state.full_name = adm_name
+                            st.session_state.phone = adm_phone
+                            st.success("✅ Admin Profile updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error(up_res["error"])
+
+            with adm_col2:
+                with st.container(border=True):
+                    st.markdown("#### 🔒 Change Master Admin Password")
+                    adm_cur_pw = st.text_input("Current Password", type="password", key="adm_cur_pw")
+                    adm_new_pw = st.text_input("New Password", type="password", key="adm_new_pw")
+                    adm_new_pw2 = st.text_input("Confirm New Password", type="password", key="adm_new_pw2")
+                    if st.button("Update Master Password", key="btn_update_adm_pw"):
+                        if not adm_cur_pw or not adm_new_pw:
+                            st.warning("Please fill in both current and new passwords.")
+                        elif adm_new_pw != adm_new_pw2:
+                            st.error("Passwords do not match.")
+                        elif len(adm_new_pw) < 6:
+                            st.warning("Password must be at least 6 characters.")
+                        else:
+                            pw_res = update_user_password(st.session_state.user_id, adm_cur_pw, adm_new_pw)
+                            if pw_res["success"]:
+                                st.success("✅ Admin password updated successfully!")
+                            else:
+                                st.error(pw_res["error"])
