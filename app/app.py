@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
+from html import escape
+from pathlib import Path
 from PIL import Image
 
 # Safe GenAI Import to prevent module boot errors
@@ -119,65 +121,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Global Styling
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    * { font-family: 'Inter', sans-serif; }
-    
-    .header-banner {
-        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-        color: white;
-        padding: 20px 26px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-    .badge-green {
-        background-color: rgba(16, 185, 129, 0.15);
-        color: #10B981;
-        font-weight: 700;
-        padding: 4px 12px;
-        border-radius: 16px;
-        display: inline-block;
-        border: 1px solid #10B981;
-    }
-    .badge-yellow {
-        background-color: rgba(245, 158, 11, 0.15);
-        color: #F59E0B;
-        font-weight: 700;
-        padding: 4px 12px;
-        border-radius: 16px;
-        display: inline-block;
-        border: 1px solid #F59E0B;
-    }
-    .badge-red {
-        background-color: rgba(239, 68, 68, 0.15);
-        color: #EF4444;
-        font-weight: 700;
-        padding: 4px 12px;
-        border-radius: 16px;
-        display: inline-block;
-        border: 1px solid #EF4444;
-    }
-
-    .tutorial-pointer {
-        background: linear-gradient(90deg, #F59E0B 0%, #D97706 100%);
-        color: white;
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 0.95rem;
-        margin-bottom: 8px;
-        box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
-        animation: pulse 1.8s infinite;
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.015); }
-        100% { transform: scale(1); }
-    }
-</style>
-""", unsafe_allow_html=True)
+# Load the shared frontend styles relative to this file.
+styles = Path(__file__).with_name("styles.css").read_text(encoding="utf-8")
+st.markdown(f"<style>{styles}</style>", unsafe_allow_html=True)
 
 # Multi-Model Fallback Caller (Protects against 503 / 404 / 429 Demand Spikes)
 def call_gemini_with_fallback(client, contents, system_instruction=None):
@@ -305,17 +251,27 @@ def show_ai_assistant_dialog():
 # 1. LOGIN, REGISTRATION & FORGOT PASSWORD GATEWAY (UNAUTHENTICATED)
 # =============================================================
 if not st.session_state.authenticated:
-    st.markdown('<h1 style="text-align:center;">🧬 Clinical Pharmacogenomics (PGx) Safety Engine</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align:center; color:#9CA3AF;">Multi-Role Precision Architecture • Patient Records • Clinician Decision Support</p>', unsafe_allow_html=True)
+    intro_col, account_col = st.columns([1.13, 1], gap="large", vertical_alignment="center")
+    with intro_col:
+        st.markdown("""
+        <section class="helix-welcome" aria-labelledby="helix-welcome-title">
+            <div class="helix-brand"><span class="helix-mark" aria-hidden="true">✚</span> HelixRx</div>
+            <h1 id="helix-welcome-title">Understand how you respond to medication.</h1>
+            <p>Bring lab results, medication details, and genetic information together to support safer prescribing decisions.</p>
+            <div class="helix-welcome-paths">
+                <div><strong>For patients</strong><span>Review medications and see when to take them.</span></div>
+                <div><strong>For clinicians</strong><span>Review drug–gene findings and prescribing risks.</span></div>
+            </div>
+        </section>
+        """, unsafe_allow_html=True)
 
-    _, mid_col, _ = st.columns([1, 1.9, 1])
-    with mid_col:
-        auth_tab1, auth_tab2, auth_tab3 = st.tabs(["🔐 Sign In", "📝 Register Account", "🔑 Forgot Password"])
+    with account_col:
+        auth_tab1, auth_tab2, auth_tab3 = st.tabs(["Sign in", "Register", "Forgot password"])
 
         # TAB 1: LOGIN
         with auth_tab1:
-            with st.container(border=True):
-                st.markdown("#### **Account Login**")
+            with st.container(border=True, key="helix_login"):
+                st.subheader("Sign in to HelixRx")
                 login_user = st.text_input("Username / Email", value="patient@gmail.com")
                 login_pw = st.text_input("Password", type="password", value="patient123")
                 
@@ -350,8 +306,8 @@ if not st.session_state.authenticated:
 
         # TAB 2: REGISTER
         with auth_tab2:
-            with st.container(border=True):
-                st.markdown("#### **Create New Account**")
+            with st.container(border=True, key="helix_register"):
+                st.subheader("Create an account")
                 account_type = st.selectbox("Register as:", ["Patient", "Clinician"])
                 new_name = st.text_input("Full Name", placeholder="e.g., Vinay Kumar")
                 new_phone = st.text_input("Mobile Number", placeholder="e.g., 9876543210")
@@ -370,8 +326,8 @@ if not st.session_state.authenticated:
 
         # TAB 3: FORGOT PASSWORD
         with auth_tab3:
-            with st.container(border=True):
-                st.markdown("#### **Reset Your Password**")
+            with st.container(border=True, key="helix_recovery"):
+                st.subheader("Reset your password")
                 st.caption("Verify your registered email and mobile number to set a new password.")
                 rec_user = st.text_input("Registered Email / Username", placeholder="e.g., patient@gmail.com", key="rec_user")
                 rec_phone = st.text_input("Registered Mobile Number", placeholder="e.g., 9876543210", key="rec_phone")
@@ -399,13 +355,9 @@ else:
     with st.sidebar:
         st.markdown(
             """
-            <div style="text-align: center; padding: 10px 0;">
-                <h1 style="color: #00ADB5; margin-bottom: 0px;">🧬 HelixRx</h1>
-                <p style="color: #888888; font-size: 0.85rem; margin-top: 0px;">
-                    Pharmacogenomic Clinical Intelligence
-                </p>
+            <div class="helix-brand helix-sidebar-brand">
+                <span class="helix-mark" aria-hidden="true">✚</span> HelixRx
             </div>
-            <hr style="margin-top: 5px; margin-bottom: 15px;">
             """,
             unsafe_allow_html=True
         )
@@ -564,10 +516,10 @@ else:
         t = TRANSLATIONS[selected_lang]
 
         st.markdown(f"""
-        <div class="header-banner">
-            <h2 style="margin:0;">🏥 {t['portal_title']}</h2>
-            <p style="margin:5px 0 0 0; opacity:0.9;">{t['portal_sub']}</p>
-        </div>
+        <section class="header-banner">
+            <h1>{escape(t['portal_title'])}</h1>
+            <p>{escape(t['portal_sub'])}</p>
+        </section>
         """, unsafe_allow_html=True)
 
         patient_tab1, patient_tab2, patient_tab3 = st.tabs([
@@ -847,22 +799,22 @@ else:
                         with h2:
                             if is_contra:
                                 st.markdown(
-                                    '<div style="background:#fee2e2; border:1px solid #ef4444; color:#b91c1c; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
-                                    '🚨 SAFETY ALERT: DOCTOR REVIEW URGENT<br><small style="font-weight:400;">Kidney/Organ Threshold Reached</small>'
+                                    '<div class="helix-status helix-status--urgent">'
+                                    '🚨 SAFETY ALERT: DOCTOR REVIEW URGENT<br><small>Kidney/Organ Threshold Reached</small>'
                                     '</div>', 
                                     unsafe_allow_html=True
                                 )
                             elif not is_safe:
                                 st.markdown(
-                                    '<div style="background:#fef3c7; border:1px solid #f59e0b; color:#b45309; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
-                                    '⚠️ CLINICAL REVIEW & TITRATION REQUIRED<br><small style="font-weight:400;">Recent test values indicate adjustment needed</small>'
+                                    '<div class="helix-status helix-status--review">'
+                                    '⚠️ CLINICAL REVIEW & TITRATION REQUIRED<br><small>Recent test values indicate adjustment needed</small>'
                                     '</div>', 
                                     unsafe_allow_html=True
                                 )
                             else:
                                 st.markdown(
-                                    '<div style="background:#dcfce7; border:1px solid #22c55e; color:#15803d; padding:8px 12px; border-radius:8px; font-weight:700; text-align:center;">'
-                                    '✅ REGIMEN CURRENTLY OPTIMAL<br><small style="font-weight:400;">Within standard therapeutic targets</small>'
+                                    '<div class="helix-status helix-status--normal">'
+                                    '✅ REGIMEN CURRENTLY OPTIMAL<br><small>Within standard therapeutic targets</small>'
                                     '</div>', 
                                     unsafe_allow_html=True
                                 )
@@ -882,28 +834,28 @@ else:
 
                         with b_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #78350f 0%, #b45309 100%); padding: 14px; border-radius: 12px; color: white;">
+                            <div class="helix-meal helix-meal--morning">
                                 <b>🌅 Morning (Breakfast)</b><br>
-                                <span style="font-size: 1.2rem; font-weight:800; color: #fef08a;">{adv.get('morning_dose', '—')}</span><br>
-                                <small>📌 {adv.get('morning_timing', 'None')}</small>
+                                <span class="helix-meal-dose">{escape(str(adv.get('morning_dose', '—')))}</span><br>
+                                <small>📌 {escape(str(adv.get('morning_timing', 'None')))}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
                         with l_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #075985 0%, #0284c7 100%); padding: 14px; border-radius: 12px; color: white;">
+                            <div class="helix-meal helix-meal--afternoon">
                                 <b>☀️ Afternoon (Lunch)</b><br>
-                                <span style="font-size: 1.2rem; font-weight:800; color: #bae6fd;">{adv.get('afternoon_dose', '—')}</span><br>
-                                <small>📌 {adv.get('afternoon_timing', 'None')}</small>
+                                <span class="helix-meal-dose">{escape(str(adv.get('afternoon_dose', '—')))}</span><br>
+                                <small>📌 {escape(str(adv.get('afternoon_timing', 'None')))}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
                         with d_col:
                             st.markdown(f"""
-                            <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); padding: 14px; border-radius: 12px; color: white;">
+                            <div class="helix-meal helix-meal--night">
                                 <b>🌙 Night (Dinner)</b><br>
-                                <span style="font-size: 1.2rem; font-weight:800; color: #c7d2fe;">{adv.get('night_dose', '—')}</span><br>
-                                <small>📌 {adv.get('night_timing', 'None')}</small>
+                                <span class="helix-meal-dose">{escape(str(adv.get('night_dose', '—')))}</span><br>
+                                <small>📌 {escape(str(adv.get('night_timing', 'None')))}</small>
                             </div>
                             """, unsafe_allow_html=True)
 
@@ -1085,10 +1037,10 @@ else:
     # =========================================================
     elif st.session_state.user_role == "Clinician":
         st.markdown(f"""
-        <div class="header-banner" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);">
-            <h2 style="margin:0;">🧑‍⚕️ Clinician Decision Portal | Dr. {st.session_state.full_name}</h2>
-            <p style="margin:5px 0 0 0; opacity:0.8;">VCF Genomic Parser • CPIC/FDA Harmonization • Organ Clearance Filters • Pharmacokinetics</p>
-        </div>
+        <section class="header-banner">
+            <h1>Clinician decision portal</h1>
+            <p>Dr. {escape(st.session_state.full_name)} · Genomic analysis, medication review, and clinical records</p>
+        </section>
         """, unsafe_allow_html=True)
 
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -1382,10 +1334,10 @@ Harmonized CPIC Level A/B Guidelines with FDA Table of Pharmacogenetic Associati
     # =========================================================
     else:  # Admin
         st.markdown("""
-        <div class="header-banner" style="background: linear-gradient(135deg, #111827 0%, #374151 100%);">
-            <h2 style="margin:0;">🛡️ System Administrator Master Command Center</h2>
-            <p style="margin:5px 0 0 0; opacity:0.8;">Platform Usage Metrics • Full User Credentials • 3-Month Patient & 6-Month Clinical Records</p>
-        </div>
+        <section class="header-banner">
+            <h1>Administration</h1>
+            <p>Review platform activity, registered users, and clinical records.</p>
+        </section>
         """, unsafe_allow_html=True)
 
         metrics = get_admin_metrics()
